@@ -4,8 +4,8 @@ import { use, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
-import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, TEAM_MEMBERS } from '@/lib/defaultData';
-import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId } from '@/lib/types';
+import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, TEAM_MEMBERS } from '@/lib/defaultData';
+import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU } from '@/lib/types';
 
 const GROUP_LABELS: Record<string, string> = {
   pp: 'Projektiniai pasiūlymai',
@@ -14,7 +14,7 @@ const GROUP_LABELS: Record<string, string> = {
   other: 'Kita',
 };
 
-type Tab = 'grafikas' | 'pp' | 'dokumentai' | 'motyvuoti' | 'pastabos';
+type Tab = 'grafikas' | 'pp' | 'dokumentai' | 'motyvuoti' | 'pastabos' | 'pu';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'I. Tekstinė ir dokumentų dalis': '📄',
@@ -42,6 +42,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     projects, loaded,
     toggleChecklistItem, toggleDocument, updateDocumentNotes,
     toggleStage, updateProject, deleteProject, updateMotyvuotiAtsakymai,
+    updateConnectionDate,
+    addDocumentFile, addChecklistFile, removeDocumentFile, removeChecklistFile,
   } = useProjects();
 
   const [tab, setTab] = useState<Tab>('grafikas');
@@ -55,6 +57,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [newAtsakymas, setNewAtsakymas] = useState({ date: '', pastaba: '', atsakymas: '' });
   const [addingAtsakymas, setAddingAtsakymas] = useState(false);
   const [editingAtsakymasId, setEditingAtsakymasId] = useState<string | null>(null);
+  const [folderStatus, setFolderStatus] = useState<'idle' | 'creating' | 'done' | 'error'>('idle');
 
   const editPreviewDate = useMemo(() => {
     if (!editing || !editParts || !editForm.startDate) return '';
@@ -85,6 +88,26 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const minActiveIndex = Math.min(...currentStages.map(s => activeStages.findIndex(a => a.id === s)).filter(i => i >= 0));
 
   const plannedDates = calcStageDates(project.startDate, selectedParts);
+  const effectiveDates = calcEffectiveStageDates(project.startDate, selectedParts, project.stageStatuses ?? {});
+  // Efektyvi statybos pradžios data — paskutinio aktyvaus etapo prognozuojama pabaiga
+  const effectiveTargetDate = (() => {
+    const stageOrder: StageId[] = ['SR', 'PP', 'PP_VIESIMAS', 'IP', 'SLD', 'TDP', 'PAKARTOTINIS', 'EKSPERTIZE'];
+    // Pirma tikrinam aktyvius etapus: jei yra faktinė pradžia, skaičiuojam prognozę
+    for (let i = stageOrder.length - 1; i >= 0; i--) {
+      const sid = stageOrder[i];
+      const planned = plannedDates[sid];
+      const status = project.stageStatuses?.[sid];
+      if (!planned) continue;
+      if (status?.startDate && !status?.endDate) {
+        const dur = new Date(planned.endDate).getTime() - new Date(planned.startDate).getTime();
+        return new Date(new Date(status.startDate).getTime() + dur).toISOString().slice(0, 10);
+      }
+      if (status?.endDate) return status.endDate;
+      const d = effectiveDates[sid];
+      if (d) return d.endDate;
+    }
+    return project.targetConstructionDate;
+  })();
 
   const ppDone = project.ppByla.filter(i => i.done).length;
   const docsDone = project.dokumentai.filter(d => d.received).length;
@@ -139,19 +162,74 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     }
   }
 
+  async function uploadFile(file: File, subfolder: string, filename: string, onDone: (f: UploadedFile) => void, onError: () => void) {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('projectName', project!.name);
+    form.append('subfolder', subfolder);
+    form.append('filename', filename);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!res.ok) { onError(); return; }
+      const data = await res.json();
+      onDone({ name: data.name, path: data.path, uploadedAt: new Date().toISOString() });
+    } catch { onError(); }
+  }
+
+  async function deleteFile(filePath: string, onDone: () => void) {
+    try {
+      await fetch('/api/delete-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: filePath }) });
+    } catch {}
+    onDone();
+  }
+
+  async function handleCreateFolder() {
+    setFolderStatus('creating');
+    try {
+      const res = await fetch('/api/create-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectName: project!.name,
+          parts: { PP: selectedParts.PP, SLD: selectedParts.SLD, TDP: selectedParts.TDP },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(`Klaida: ${data.error}`); setFolderStatus('error'); return; }
+      setFolderStatus('done');
+      setTimeout(() => setFolderStatus('idle'), 3000);
+    } catch {
+      setFolderStatus('error');
+    }
+  }
+
   const tabs: { id: Tab; label: string }[] = [
     { id: 'grafikas', label: 'Grafikas' },
     { id: 'pp', label: `PP sąrašas (${ppDone}/${project.ppByla.length})` },
     { id: 'dokumentai', label: `Dokumentai (${docsDone}/${project.dokumentai.length})` },
-    { id: 'motyvuoti', label: `Motyvuoti atsakymai${project.motyvuotiAtsakymai.length > 0 ? ` (${project.motyvuotiAtsakymai.length})` : ''}` },
+    { id: 'motyvuoti', label: `Motyvuoti${project.motyvuotiAtsakymai.length > 0 ? ` (${project.motyvuotiAtsakymai.length})` : ''}` },
     { id: 'pastabos', label: 'Pastabos' },
+    { id: 'pu', label: 'PU' },
   ];
 
   return (
     <div>
       {/* Header */}
       <div className="mb-6">
-        <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">← Visi projektai</Link>
+        <div className="flex items-center justify-between">
+          <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">← Visi projektai</Link>
+          <div className="flex items-center gap-3">
+            <Link href={`/projects/${project.id}/klientas`} target="_blank" className="text-sm text-slate-400 hover:text-slate-700 flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Kliento ataskaita
+            </Link>
+            <span className="text-slate-200">|</span>
+            <Link href={`/projects/${project.id}/print`} target="_blank" className="text-sm text-slate-400 hover:text-slate-700 flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              Spausdinti
+            </Link>
+          </div>
+        </div>
         <div className="mt-3 flex items-start justify-between gap-4">
           <div>
             {editing && editParts ? (
@@ -223,9 +301,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   )}
                 </div>
 
-                <div className="flex gap-2 pt-1">
-                  <button onClick={handleEditSave} className="bg-slate-900 text-white text-xs px-4 py-2 rounded-lg hover:bg-slate-700">Išsaugoti</button>
-                  <button onClick={() => setEditing(false)} className="text-xs text-slate-500 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50">Atšaukti</button>
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex gap-2">
+                    <button onClick={handleEditSave} className="bg-slate-900 text-white text-xs px-4 py-2 rounded-lg hover:bg-slate-700">Išsaugoti</button>
+                    <button onClick={() => setEditing(false)} className="text-xs text-slate-500 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50">Atšaukti</button>
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => { updateProject(project!.id, { archived: !project!.archived }); setEditing(false); }} className="text-xs text-slate-400 hover:text-slate-700 transition-colors">{project!.archived ? '↩ Atarchyvuoti' : '📦 Archyvuoti'}</button>
+                    <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">Ištrinti projektą</button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -239,18 +323,34 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
                 </div>
-                <p className="text-slate-500 text-sm mt-0.5">{project.address}</p>
+                {project.address && project.address !== project.name && (
+                  <p className="text-slate-500 text-sm mt-0.5">{project.address}</p>
+                )}
                 <p className="text-slate-400 text-xs mt-0.5">{project.client}{project.clientEmail && <> · <a href={`mailto:${project.clientEmail}`} className="hover:text-slate-600">{project.clientEmail}</a></>}</p>
               </div>
             )}
           </div>
           <div className="flex-shrink-0 text-right">
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 mb-2">
+            <div className={`border rounded-xl px-4 py-2.5 mb-2 ${effectiveTargetDate !== project.targetConstructionDate ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
               <p className="text-xs text-slate-400">Statybos pradžia</p>
               <p className="text-lg font-bold text-slate-900">{formatDate(project.targetConstructionDate)}</p>
+              {effectiveTargetDate !== project.targetConstructionDate && (
+                <p className="text-xs text-amber-600 mt-0.5">Numatoma: <strong>{formatDate(effectiveTargetDate)}</strong></p>
+              )}
             </div>
-            <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">
-              Ištrinti projektą
+            <button
+              onClick={handleCreateFolder}
+              disabled={folderStatus === 'creating'}
+              className={`text-xs mb-1 block transition-colors ${
+                folderStatus === 'done' ? 'text-green-600' :
+                folderStatus === 'error' ? 'text-red-500 hover:text-red-700' :
+                'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {folderStatus === 'creating' ? '⏳ Kuriama...' :
+               folderStatus === 'done' ? '✓ Aplankas sukurtas' :
+               folderStatus === 'error' ? '↺ Bandyti vėl' :
+               '📁 Sukurti aplanką'}
             </button>
           </div>
         </div>
@@ -345,7 +445,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
       {/* Tabs */}
       <div className="border-b border-slate-200 mb-6">
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto scrollbar-none"
+          style={{scrollbarWidth:'none',msOverflowStyle:'none'}}>
           {tabs.map(t => (
             <button
               key={t.id}
@@ -389,8 +490,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     {isParallel && (
                       <span className="text-xs text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">⇄ lygiagrečiai su SLD</span>
                     )}
-                    {status?.endDate && <span className="text-green-500 text-xs font-medium">✓ Baigta</span>}
-                    {!status?.endDate && isCurrent && <span className="text-xs text-slate-500 font-medium">⬤ vyksta</span>}
+                    {status?.endDate && <span className="text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">✓ Baigta</span>}
+                    {!status?.endDate && isCurrent && <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block"/>vyksta</span>}
                     {!status?.endDate && isPast && !isCurrent && <span className="text-xs text-slate-400 font-medium">◦ ankstesnis</span>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -431,42 +532,63 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 <div className="grid grid-cols-2 gap-4">
                   {/* Left: dates + tasks */}
                   <div>
-                    {/* Planned dates */}
+                    {/* Planned dates + forecast */}
                     {(() => {
                       const planned = plannedDates[stage.id as StageId];
-                      return planned ? (
-                        <div className="flex items-center gap-3 text-xs bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 mb-2">
-                          <span className="text-slate-400 font-medium shrink-0">Planas:</span>
-                          <span className="text-slate-600">{formatDate(planned.startDate)}</span>
-                          <span className="text-slate-300">→</span>
-                          <span className="text-slate-600">{formatDate(planned.endDate)}</span>
+                      if (!planned) return null;
+                      // Prognozuojama pabaiga: faktinė pradžia + planuota trukmė
+                      const plannedDuration = new Date(planned.endDate).getTime() - new Date(planned.startDate).getTime();
+                      const forecastEnd = status?.startDate && !status?.endDate
+                        ? new Date(new Date(status.startDate).getTime() + plannedDuration).toISOString().slice(0, 10)
+                        : null;
+                      return (
+                        <div className="space-y-1 mb-2">
+                          <div className="flex items-center gap-3 text-xs bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                            <span className="text-slate-400 font-medium shrink-0 w-14">Planas:</span>
+                            <span className="text-slate-600 whitespace-nowrap">{formatDate(planned.startDate)}</span>
+                            <span className="text-slate-300">→</span>
+                            <span className="text-slate-600 whitespace-nowrap">{formatDate(planned.endDate)}</span>
+                          </div>
+                          {forecastEnd && (
+                            <div className="flex items-center gap-3 text-xs bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                              <span className="text-amber-500 font-medium shrink-0 w-14">Numatoma:</span>
+                              <span className="text-amber-700 whitespace-nowrap">{formatDate(status!.startDate)}</span>
+                              <span className="text-amber-300">→</span>
+                              <span className="text-amber-700 font-medium whitespace-nowrap">{formatDate(forecastEnd)}</span>
+                            </div>
+                          )}
                         </div>
-                      ) : null;
+                      );
                     })()}
+
+                    {/* Baigti šiandien */}
+                    {isCurrent && !status?.endDate && (
+                      <button
+                        onClick={() => {
+                          const today = new Date().toISOString().slice(0, 10);
+                          updateProject(project.id, { stageStatuses: { ...project.stageStatuses, [stage.id]: { ...status, endDate: today } } });
+                        }}
+                        className="w-full mb-2 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        ✓ Baigti šiandien
+                      </button>
+                    )}
 
                     {/* Actual dates */}
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       <div>
                         <label className="text-xs text-slate-400 block mb-1">Faktas: pradžia</label>
-                        <input
-                          type="date"
-                          value={status?.startDate ?? ''}
-                          onChange={e => updateProject(project.id, {
-                            stageStatuses: { ...project.stageStatuses, [stage.id]: { ...status, startDate: e.target.value } },
-                          })}
-                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
-                        />
+                        <div className="relative w-full" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
+                          <span className="flex items-center gap-1.5 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 cursor-pointer"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-slate-400"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{status?.startDate ? formatDate(status.startDate) : '—'}</span>
+                          <input type="date" value={status?.startDate ?? ''} onChange={e => updateProject(project.id, { stageStatuses: { ...project.stageStatuses, [stage.id]: { ...status, startDate: e.target.value } } })} className="absolute inset-0 opacity-0 w-full" />
+                        </div>
                       </div>
                       <div>
                         <label className="text-xs text-slate-400 block mb-1">Faktas: pabaiga</label>
-                        <input
-                          type="date"
-                          value={status?.endDate ?? ''}
-                          onChange={e => updateProject(project.id, {
-                            stageStatuses: { ...project.stageStatuses, [stage.id]: { ...status, endDate: e.target.value } },
-                          })}
-                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
-                        />
+                        <div className="relative w-full" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
+                          <span className="flex items-center gap-1.5 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 cursor-pointer"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-slate-400"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{status?.endDate ? formatDate(status.endDate) : '—'}</span>
+                          <input type="date" value={status?.endDate ?? ''} onChange={e => updateProject(project.id, { stageStatuses: { ...project.stageStatuses, [stage.id]: { ...status, endDate: e.target.value } } })} className="absolute inset-0 opacity-0 w-full" />
+                        </div>
                       </div>
                     </div>
 
@@ -477,18 +599,25 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         <div className="flex flex-wrap gap-1.5">
                           {tdpSubParts.map(p => {
                             const active = !!selectedParts[p.id as PartId];
+                            const hasSpSaLvn = !!(selectedParts.SP || selectedParts.SA || selectedParts.LVN);
+                            const bdDisabled = p.id === 'BD' && !hasSpSaLvn;
                             return (
                               <button
                                 key={p.id}
+                                disabled={bdDisabled}
+                                title={bdDisabled ? 'BD įjungiama tik kai yra SP, SA arba LVN' : undefined}
                                 onClick={() => {
+                                  if (bdDisabled) return;
                                   const newParts = { ...selectedParts, [p.id]: !active };
                                   const newTarget = calcTargetDate(project.startDate, newParts);
                                   updateProject(project.id, { selectedParts: newParts, targetConstructionDate: newTarget });
                                 }}
                                 className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-all ${
-                                  active
-                                    ? 'bg-indigo-600 text-white border-indigo-600'
-                                    : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-400'
+                                  bdDisabled
+                                    ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                                    : active
+                                      ? 'bg-indigo-600 text-white border-indigo-600'
+                                      : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-400'
                                 }`}
                               >
                                 {p.label} <span className={active ? 'text-indigo-200' : 'text-slate-300'}>{p.durationDays / 7} sav.</span>
@@ -522,12 +651,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               )}
                               {/* Actual end date (editable, shown only when done) */}
                               {done && (
-                                <input type="date" value={pStatus?.endDate ?? ''}
-                                  onChange={e => updateProject(project.id, {
-                                    partStatuses: { ...(project.partStatuses ?? {}), [p.id]: { ...pStatus, endDate: e.target.value } }
-                                  })}
-                                  className="border border-green-200 rounded px-1.5 py-0.5 text-xs text-green-700 bg-white focus:outline-none w-32 shrink-0"
-                                />
+                                <div className="relative shrink-0" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
+                                  <span className="flex items-center gap-1 border border-green-200 rounded px-1.5 py-0.5 text-xs text-green-700 bg-white w-32 cursor-pointer"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{pStatus?.endDate ? formatDate(pStatus.endDate) : '—'}</span>
+                                  <input type="date" value={pStatus?.endDate ?? ''} onChange={e => updateProject(project.id, { partStatuses: { ...(project.partStatuses ?? {}), [p.id]: { ...pStatus, endDate: e.target.value } } })} className="absolute inset-0 opacity-0 w-full" />
+                                </div>
                               )}
                             </div>
                           );
@@ -568,8 +695,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <div className="bg-slate-900 text-white rounded-xl p-4 mt-2">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-slate-400 mb-1">Tikslinė statybos pradžia</p>
+                <p className="text-xs text-slate-400 mb-1">Planuojama statybos pradžia</p>
                 <p className="text-xl font-bold">{formatDate(project.targetConstructionDate)}</p>
+                {effectiveTargetDate !== project.targetConstructionDate && (
+                  <p className="text-xs text-amber-400 mt-1">Numatoma: <strong>{formatDate(effectiveTargetDate)}</strong></p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-400 mb-1">Pradžia</p>
@@ -602,22 +732,42 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   </div>
                   <div className="space-y-1.5">
                     {items.map(item => (
-                      <label
+                      <div
                         key={item.id}
-                        className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                        className={`p-3 rounded-lg transition-colors ${
                           item.done ? 'bg-green-50 border border-green-100' : 'bg-white border border-slate-100 hover:border-slate-200'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={item.done}
-                          onChange={() => toggleChecklistItem(project.id, item.id)}
-                          className="mt-0.5 h-4 w-4 accent-green-600 flex-shrink-0"
-                        />
-                        <span className={`text-sm ${item.done ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                          {item.label}
-                        </span>
-                      </label>
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={item.done}
+                            onChange={() => toggleChecklistItem(project.id, item.id)}
+                            className="mt-0.5 h-4 w-4 accent-green-600 flex-shrink-0"
+                          />
+                          <span className={`text-sm flex-1 ${item.done ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                            {item.label}
+                          </span>
+                          <label className="cursor-pointer text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0 bg-slate-100 hover:bg-slate-200 rounded px-1.5 py-0.5 text-xs" title="Pridėti failą">
+                            <input type="file" className="hidden" onChange={e => {
+                              const f = e.target.files?.[0]; if (!f) return;
+                              uploadFile(f, item.subfolder ?? '01_PP/01_PP_BYLA/01_DOKUMENTAI', item.label, uf => addChecklistFile(project.id, item.id, uf), () => alert('Klaida įkeliant failą'));
+                              e.target.value = '';
+                            }} />
+                            📎
+                          </label>
+                        </div>
+                        {(item.files ?? []).length > 0 && (
+                          <div className="mt-2 ml-7 flex flex-wrap gap-1.5">
+                            {(item.files ?? []).map(f => (
+                              <span key={f.path} className="flex items-center gap-1 text-xs bg-slate-100 rounded px-2 py-0.5">
+                                <a href={`/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[160px] truncate">{f.name}</a>
+                                <button onClick={() => deleteFile(f.path, () => removeChecklistFile(project.id, item.id, f.path))} className="text-slate-300 hover:text-red-400 ml-0.5">×</button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -651,16 +801,62 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     className="mt-0.5 h-4 w-4 accent-green-600 flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded ${
                         doc.received ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
                       }`}>{doc.number}</span>
-                      <span className={`text-sm font-medium ${doc.received ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                      <span className={`text-sm font-medium flex-1 ${doc.received ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
                         {doc.name}
                       </span>
+                      <label className="cursor-pointer text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0" title="Pridėti failą">
+                        <input type="file" className="hidden" onChange={e => {
+                          const f = e.target.files?.[0]; if (!f) return;
+                          uploadFile(f, doc.subfolder ?? 'DOKUMENTAI', `${doc.number}_${doc.name}`, uf => addDocumentFile(project.id, doc.id, uf), () => alert('Klaida įkeliant failą'));
+                          e.target.value = '';
+                        }} />
+                        📎
+                      </label>
                     </div>
+                    {(doc.files ?? []).length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {(doc.files ?? []).map(f => (
+                          <span key={f.path} className="flex items-center gap-1 text-xs bg-slate-100 rounded px-2 py-0.5">
+                            <a href={`/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[180px] truncate">{f.name}</a>
+                            <button onClick={() => deleteFile(f.path, () => removeDocumentFile(project.id, doc.id, f.path))} className="text-slate-300 hover:text-red-400 ml-0.5">×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {doc.description && (
                       <p className="text-xs text-slate-400 mt-0.5 ml-7">{doc.description}</p>
+                    )}
+                    {doc.id === 'doc-06' && (
+                      <div className="mt-2 ml-7 space-y-1">
+                        {[
+                          { key: 'vanduo', label: 'vanduo, nuotekos' },
+                          { key: 'lietus', label: 'lietus' },
+                          { key: 'kelias', label: 'kelias' },
+                          { key: 'elektra', label: 'elektra' },
+                          { key: 'rysiai', label: 'ryšiai' },
+                          { key: 'dujos', label: 'dujos' },
+                        ].map(({ key, label }) => {
+                          const date = doc.connectionDates?.[key] ?? '';
+                          return (
+                            <div key={key} className="flex items-center gap-2">
+                              <span className={`text-xs w-36 ${date ? 'text-slate-700' : 'text-slate-400'}`}>{label}</span>
+                              <div className="relative flex items-center" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
+                                <span className={`flex items-center gap-1 text-xs border border-slate-200 rounded px-2 py-0.5 w-28 cursor-pointer ${date ? 'text-slate-700' : 'text-slate-400'}`}><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{date ? formatDate(date) : '—'}</span>
+                                <input
+                                  type="date"
+                                  value={date}
+                                  onChange={e => updateConnectionDate(project.id, doc.id, key, e.target.value)}
+                                  className="absolute inset-0 opacity-0 w-full"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                     {editingNote === doc.id ? (
                       <div className="mt-2 ml-7">
@@ -731,8 +927,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 space-y-3">
               <div>
                 <label className="text-xs text-slate-500 block mb-1">Data</label>
-                <input type="date" value={newAtsakymas.date} onChange={e => setNewAtsakymas(a => ({ ...a, date: e.target.value }))}
-                  className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
+                <div className="relative inline-block" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
+                  <span className="flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 min-w-[120px] cursor-pointer"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-slate-400"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{newAtsakymas.date ? formatDate(newAtsakymas.date) : '—'}</span>
+                  <input type="date" value={newAtsakymas.date} onChange={e => setNewAtsakymas(a => ({ ...a, date: e.target.value }))} className="absolute inset-0 opacity-0 w-full" />
+                </div>
               </div>
               <div>
                 <label className="text-xs text-slate-500 block mb-1">Savivaldybės pastaba</label>
@@ -769,7 +967,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 <div key={item.id} className={`bg-white rounded-xl border p-4 ${item.atsakyta ? 'border-green-200' : 'border-slate-200'}`}>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400 font-medium">{item.date ? item.date.split('-').reverse().join('.') : '—'}</span>
+                      <span className="text-xs text-slate-400 font-medium">{formatDate(item.date)}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${item.atsakyta ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                         {item.atsakyta ? '✓ Atsakyta' : 'Laukia atsakymo'}
                       </span>
@@ -829,6 +1027,266 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </div>
         </div>
       )}
+
+      {tab === 'pu' && (
+        <PUTab pu={project.pu ?? { ...DEFAULT_PU }} onChange={pu => updateProject(project.id, { pu })} project={project} />
+      )}
+    </div>
+  );
+}
+
+// ─── Projektavimo užduotis tab ───────────────────────────────────────────────
+
+const PRIORITETAI_LABELS = [
+  { key: 'funkcionalumas' as const, label: 'Funkcionalumas' },
+  { key: 'archIsraiška' as const, label: 'Architektūrinė išraiška' },
+  { key: 'statybosKaina' as const, label: 'Statybos kaina' },
+  { key: 'energinis' as const, label: 'Energinis efektyvumas' },
+  { key: 'paprastumas' as const, label: 'Statybos paprastumas' },
+];
+
+function PURadio({ label, value, options, onChange }: {
+  label: string; value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-slate-500 mb-1.5">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map(o => (
+          <button key={o.value} type="button"
+            onClick={() => onChange(value === o.value ? '' : o.value)}
+            className={`px-3 py-1.5 rounded-lg border text-sm transition-all ${
+              value === o.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
+            }`}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PUTab({ pu, onChange, project }: { pu: ProjektavimoUzduotis; onChange: (pu: ProjektavimoUzduotis) => void; project: import('@/lib/types').Project }) {
+  const [exporting, setExporting] = useState(false);
+
+  function set<K extends keyof ProjektavimoUzduotis>(key: K, val: ProjektavimoUzduotis[K]) {
+    onChange({ ...pu, [key]: val });
+  }
+  function setPriority(key: keyof ProjektavimoUzduotis['prioritetai'], rank: number) {
+    onChange({ ...pu, prioritetai: { ...pu.prioritetai, [key]: pu.prioritetai[key] === rank ? 0 : rank } });
+  }
+  function toggleFasadas(val: string) {
+    onChange({ ...pu, fasadai: pu.fasadai.includes(val) ? pu.fasadai.filter(f => f !== val) : [...pu.fasadai, val] });
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const body = {
+        projectName: project.name,
+        address: project.address,
+        client: project.client,
+        clientEmail: project.clientEmail,
+        startDate: project.startDate,
+        hasPP: project.selectedParts.PP,
+        hasSLD: project.selectedParts.SLD,
+        hasTDP: project.selectedParts.TDP,
+        hasBD: project.selectedParts.BD,
+        hasLVN: project.selectedParts.LVN,
+        ...pu,
+      };
+      const res = await fetch('/api/pu-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const match = cd.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : 'PU.docx';
+
+      // 1. Trigger browser download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // 2. Auto-save to project folder DOKUMENTAI/01_PROJEKTAVIMO UZDUOTIS
+      try {
+        const formData = new FormData();
+        formData.append('file', blob, filename);
+        formData.append('projectName', project.name);
+        formData.append('subfolder', 'DOKUMENTAI/01_PROJEKTAVIMO UZDUOTIS');
+        formData.append('filename', 'PU');
+        await fetch('/api/upload', { method: 'POST', body: formData });
+      } catch {
+        // silent — download already succeeded
+      }
+    } catch {
+      alert('Nepavyko eksportuoti. Bandykite dar kartą.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const inp = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900";
+  const section = "bg-white rounded-xl border border-slate-200 p-5 space-y-4";
+
+  return (
+    <div className="space-y-4">
+      {/* Export button */}
+      <div className="flex justify-end">
+        <button onClick={handleExport} disabled={exporting}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors">
+          {exporting ? (
+            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+          ) : (
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+          )}
+          {exporting ? 'Eksportuojama…' : 'Eksportuoti į Word'}
+        </button>
+      </div>
+      {/* Section 2 */}
+      <div className={section}>
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">2. Projektavimo duomenys</h3>
+        <div className="grid grid-cols-2 gap-4">
+          {([
+            ['objektas', 'Projektavimo objektas', 'pvz. Gyvenamasis namas'],
+            ['statybosRusis', 'Statybos rūšis', 'pvz. Nauja statyba'],
+            ['bendrasPlotai', 'Bendras plotas, m²', 'pvz. 180'],
+            ['sklypoPlotai', 'Sklypo plotas, m²', 'pvz. 1200'],
+            ['zemesPaskirtis', 'Žemės sklypo paskirtis', 'pvz. Gyvenamoji'],
+            ['telefonas', 'Telefono Nr.', '+370 600 00000'],
+          ] as [keyof ProjektavimoUzduotis, string, string][]).map(([key, lbl, ph]) => (
+            <div key={key as string}>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">{lbl}</label>
+              <input value={pu[key] as string} onChange={e => set(key, e.target.value as any)}
+                placeholder={ph} className={inp} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Section 4 */}
+      <div className={section}>
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">4. Prioritetai (1–5)</h3>
+        <p className="text-xs text-slate-400">Sunumeruokite nuo 1 (svarbiausias) iki 5</p>
+        {PRIORITETAI_LABELS.map(({ key, label }) => (
+          <div key={key} className="flex items-center gap-3">
+            <span className="text-sm text-slate-700 w-48 shrink-0">{label}</span>
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} type="button" onClick={() => setPriority(key, n)}
+                  className={`w-8 h-8 rounded-lg border text-sm font-medium transition-all ${
+                    pu.prioritetai[key] === n ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-500 hover:border-slate-400'
+                  }`}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Section 5 */}
+      <div className={section}>
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">5. Funkcinė struktūra</h3>
+
+        <p className="text-sm font-semibold text-slate-600">Bendra erdvė</p>
+        <PURadio label="Virtuvės tipas" value={pu.virtuveTipas} onChange={v => set('virtuveTipas', v as any)}
+          options={[{ value: 'atvira', label: 'Atvira' }, { value: 'pusiau_atvira', label: 'Pusiau atvira' }, { value: 'uzdara', label: 'Uždara' }]} />
+        <PURadio label="Bendros erdvės dydis" value={pu.bendrosErdvesDydis} onChange={v => set('bendrosErdvesDydis', v as any)}
+          options={[{ value: 'vidutine', label: '~45–50 m²' }, { value: 'erdvi', label: '~50–60 m²' }, { value: 'labai_erdvi', label: '60 m²+' }, { value: 'kita', label: 'Kita' }]} />
+        {pu.bendrosErdvesDydis === 'kita' && (
+          <input value={pu.bendrosErdvesDydisKita} onChange={e => set('bendrosErdvesDydisKita', e.target.value)} placeholder="Nurodyti dydį" className={inp} />
+        )}
+        <PURadio label="Lubų aukštis" value={pu.lubosAukstis} onChange={v => set('lubosAukstis', v as any)}
+          options={[{ value: 'standartinis', label: '~2,80–3,00 m' }, { value: 'padidintas', label: '~3,20–3,40 m' }, { value: 'dvieju_aukstu', label: 'Dviejų aukštų' }, { value: 'kitas', label: 'Kitas' }]} />
+        {pu.lubosAukstis === 'kitas' && (
+          <input value={pu.lubosAukstisKitas} onChange={e => set('lubosAukstisKitas', e.target.value)} placeholder="Nurodyti aukštį" className={inp} />
+        )}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={pu.sandeliukasPrieVirtuve} onChange={e => set('sandeliukasPrieVirtuve', e.target.checked)} className="rounded border-slate-300" />
+          <span className="text-sm text-slate-700">Sandėliukas prie virtuvės</span>
+        </label>
+
+        <p className="text-sm font-semibold text-slate-600 pt-2">Gyvenamosios patalpos</p>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-slate-700 shrink-0">Vaikų kambarių skaičius</label>
+          <input type="number" min={0} max={10} value={pu.vaikusKambariuSk || ''} onChange={e => set('vaikusKambariuSk', parseInt(e.target.value) || 0)}
+            className="w-20 border border-slate-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-slate-900" placeholder="0" />
+        </div>
+        <PURadio label="Darbo kambarys" value={pu.darbKambarys} onChange={v => set('darbKambarys', v as any)}
+          options={[{ value: 'reikalingas', label: 'Reikalingas' }, { value: 'universali', label: 'Universali patalpa' }, { value: 'nereikalingas', label: 'Nereikalingas' }]} />
+        <PURadio label="Tėvų drabužinė" value={pu.drabuzine} onChange={v => set('drabuzine', v as any)}
+          options={[{ value: 'atskira', label: 'Atskira' }, { value: 'miegamojo', label: 'Miegamojo patalpoje' }, { value: 'nenumatoma', label: 'Nenumatoma' }]} />
+        <PURadio label="Atskiras tėvų sanitarinis mazgas" value={pu.tevisSmaz} onChange={v => set('tevisSmaz', v as any)}
+          options={[{ value: 'su_dusu', label: 'Su dušu' }, { value: 'su_vonia', label: 'Su vonia' }, { value: 'ne', label: 'Ne' }]} />
+
+        <p className="text-sm font-semibold text-slate-600 pt-2">Sanitarinės ir pagalbinės patalpos</p>
+        <PURadio label="Bendras vonios kambarys" value={pu.bendrasVonios} onChange={v => set('bendrasVonios', v as any)}
+          options={[{ value: 'su_vonia', label: 'Su vonia' }, { value: 'su_dusu', label: 'Su dušu' }]} />
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={pu.papildomasWC} onChange={e => set('papildomasWC', e.target.checked)} className="rounded border-slate-300" />
+            <span className="text-sm text-slate-700">Papildomas WC</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={pu.techPatalpa} onChange={e => set('techPatalpa', e.target.checked)} className="rounded border-slate-300" />
+            <span className="text-sm text-slate-700">Techninė patalpa / sandėliukas</span>
+          </label>
+        </div>
+        <PURadio label="Skalbykla" value={pu.skalbykla} onChange={v => set('skalbykla', v as any)}
+          options={[{ value: 'atskira', label: 'Atskira patalpa' }, { value: 'technine', label: 'Techninėje patalpoje' }]} />
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-slate-700 shrink-0">Automobilių garaže skaičius</label>
+          <input type="number" min={0} max={10} value={pu.garazasAutoSk || ''} onChange={e => set('garazasAutoSk', parseInt(e.target.value) || 0)}
+            className="w-20 border border-slate-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-slate-900" placeholder="0" />
+        </div>
+        <PURadio label="Garažo sprendimas" value={pu.garazasSprendimas} onChange={v => set('garazasSprendimas', v as any)}
+          options={[{ value: 'integruotas', label: 'Integruotas' }, { value: 'atskiras', label: 'Atskiras' }, { value: 'stogine', label: 'Stoginė' }, { value: 'projektuojant', label: 'Sprendžiama proj. metu' }]} />
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Kitos patalpos</label>
+          <input value={pu.kitosPatalpos} onChange={e => set('kitosPatalpos', e.target.value)}
+            placeholder="pvz. Svečių kambarys, sporto kambarys..." className={inp} />
+        </div>
+      </div>
+
+      {/* Section 6 */}
+      <div className={section}>
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">6. Architektūriniai pasirinkimai</h3>
+        <PURadio label="Pastato charakteris" value={pu.pastatoCharakteris} onChange={v => set('pastatoCharakteris', v as any)}
+          options={[{ value: 'siuolaikinis', label: 'Šiuolaikinis' }, { value: 'tradicinis', label: 'Tradicinis' }, { value: 'kita', label: 'Kita' }]} />
+        {pu.pastatoCharakteris === 'kita' && (
+          <input value={pu.pastatoCharakterisKita} onChange={e => set('pastatoCharakterisKita', e.target.value)} placeholder="Apibūdinti stilių" className={inp} />
+        )}
+        <PURadio label="Stogo tipas" value={pu.stogasTipas} onChange={v => set('stogasTipas', v as any)}
+          options={[{ value: 'slaitinis', label: 'Šlaitinis' }, { value: 'plokscias', label: 'Plokščias' }, { value: 'kombinuotas', label: 'Kombinuotas' }]} />
+        <div>
+          <p className="text-xs font-medium text-slate-500 mb-1.5">Fasadų apdaila (galimi keli)</p>
+          <div className="flex flex-wrap gap-2">
+            {[{ value: 'tinkas', label: 'Tinkas' }, { value: 'medis', label: 'Medis / lentelės' }, { value: 'klinkeris', label: 'Klinkeris' }, { value: 'kita', label: 'Kita' }].map(o => (
+              <button key={o.value} type="button" onClick={() => toggleFasadas(o.value)}
+                className={`px-3 py-1.5 rounded-lg border text-sm transition-all ${
+                  pu.fasadai.includes(o.value) ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
+                }`}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {pu.fasadai.includes('kita') && (
+            <input value={pu.fasadaiKita} onChange={e => set('fasadaiKita', e.target.value)}
+              placeholder="Nurodyti medžiagą" className={`mt-2 ${inp}`} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -37,11 +37,19 @@ export interface SelectedParts {
   KITA_days: number; // custom duration for KITA
 }
 
+export interface UploadedFile {
+  name: string;
+  path: string;
+  uploadedAt: string;
+}
+
 export interface ChecklistItem {
   id: string;
   label: string;
   category: string;
+  subfolder?: string;
   done: boolean;
+  files?: UploadedFile[];
 }
 
 export interface DocumentItem {
@@ -49,8 +57,12 @@ export interface DocumentItem {
   number: string;
   name: string;
   description: string;
+  subfolder?: string;
   received: boolean;
   notes: string;
+  orderedDate?: string;
+  connectionDates?: Record<string, string>;
+  files?: UploadedFile[];
 }
 
 export interface MotyvuotasAtsakymas {
@@ -79,6 +91,76 @@ export interface StageStatus {
   notes: string;
 }
 
+export interface ProjektavimoUzduotis {
+  // Section 2 extras (address/client/email/name come from Project)
+  objektas: string;        // pvz. "Gyvenamasis namas"
+  statybosRusis: string;   // pvz. "Nauja statyba"
+  bendrasPlotai: string;   // numatomas bendrasis pastato plotas
+  sklypoPlotai: string;    // sklypo plotas, m²
+  zemesPaskirtis: string;  // žemės sklypo paskirtis
+  telefonas: string;       // telefono nr.
+
+  // Section 4: Prioritetai (ranking 1–5, 0 = unset)
+  prioritetai: {
+    funkcionalumas: number;
+    archIsraiška: number;
+    statybosKaina: number;
+    energinis: number;
+    paprastumas: number;
+  };
+
+  // Section 5a: Bendra erdvė
+  virtuveTipas: 'atvira' | 'pusiau_atvira' | 'uzdara' | '';
+  bendrosErdvesDydis: 'vidutine' | 'erdvi' | 'labai_erdvi' | 'kita' | '';
+  bendrosErdvesDydisKita: string;
+  lubosAukstis: 'standartinis' | 'padidintas' | 'dvieju_aukstu' | 'kitas' | '';
+  lubosAukstisKitas: string;
+  sandeliukasPrieVirtuve: boolean;
+
+  // Section 5b: Gyvenamosios patalpos
+  vaikusKambariuSk: number;
+  darbKambarys: 'reikalingas' | 'nereikalingas' | 'universali' | '';
+  drabuzine: 'atskira' | 'miegamojo' | 'nenumatoma' | '';
+  tevisSmaz: 'su_dusu' | 'su_vonia' | 'ne' | '';
+
+  // Section 5c: Sanitarinės ir pagalbinės
+  bendrasVonios: 'su_vonia' | 'su_dusu' | '';
+  papildomasWC: boolean;
+  techPatalpa: boolean;
+  skalbykla: 'atskira' | 'technine' | '';
+  garazasAutoSk: number;
+  garazasSprendimas: 'integruotas' | 'atskiras' | 'stogine' | 'projektuojant' | '';
+  kitosPatalpos: string;
+
+  // Section 6: Architektūriniai pasirinkimai
+  pastatoCharakteris: 'siuolaikinis' | 'tradicinis' | 'kita' | '';
+  pastatoCharakterisKita: string;
+  stogasTipas: 'slaitinis' | 'plokscias' | 'kombinuotas' | '';
+  fasadai: string[]; // 'tinkas' | 'medis' | 'klinkeris' | 'kita'
+  fasadaiKita: string;
+}
+
+export const DEFAULT_PU: ProjektavimoUzduotis = {
+  objektas: '', statybosRusis: '', bendrasPlotai: '', sklypoPlotai: '',
+  zemesPaskirtis: '', telefonas: '',
+  prioritetai: { funkcionalumas: 0, archIsraiška: 0, statybosKaina: 0, energinis: 0, paprastumas: 0 },
+  virtuveTipas: '', bendrosErdvesDydis: '', bendrosErdvesDydisKita: '',
+  lubosAukstis: '', lubosAukstisKitas: '', sandeliukasPrieVirtuve: false,
+  vaikusKambariuSk: 0, darbKambarys: '', drabuzine: '', tevisSmaz: '',
+  bendrasVonios: '', papildomasWC: false, techPatalpa: false,
+  skalbykla: '', garazasAutoSk: 0, garazasSprendimas: '', kitosPatalpos: '',
+  pastatoCharakteris: '', pastatoCharakterisKita: '',
+  stogasTipas: '', fasadai: [], fasadaiKita: '',
+};
+
+export interface ManualTask {
+  id: string;
+  label: string;
+  assignee?: TeamMemberId;
+  dueDate?: string; // YYYY-MM-DD
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -97,6 +179,13 @@ export interface Project {
   partStatuses: Partial<Record<string, StageStatus>>; // TDP sub-part tracking
   stageAssignees: Partial<Record<StageId, TeamMemberId[]>>;
   notes: string;
+  taskStatuses?: Record<string, { dueDate?: string; doneAt?: string }>;
+  manualTasks?: ManualTask[];
+  pu?: ProjektavimoUzduotis;
+  archived?: boolean;
+  paused?: boolean;
+  pauseReason?: string;
+  pauseUntil?: string; // YYYY-MM-DD control date
   createdAt: string;
   updatedAt: string;
 }
