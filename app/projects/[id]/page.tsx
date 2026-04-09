@@ -635,7 +635,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               {/* Done toggle */}
                               <button
                                 onClick={() => updateProject(project.id, {
-                                  partStatuses: { ...(project.partStatuses ?? {}), [p.id]: { ...pStatus, endDate: done ? '' : new Date().toISOString().slice(0, 10) } }
+                                  partStatuses: { ...(project.partStatuses ?? {}), [p.id]: { startDate: pStatus?.startDate ?? '', completed: pStatus?.completed ?? false, notes: pStatus?.notes ?? '', endDate: done ? '' : new Date().toISOString().slice(0, 10) } }
                                 })}
                                 className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${done ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 hover:border-indigo-400'}`}
                               >

@@ -303,7 +303,7 @@ export async function POST(req: NextRequest) {
     .slice(0, 60);
   const filename = `PU_${safeName}_${today}.docx`;
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
