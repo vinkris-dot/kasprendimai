@@ -762,6 +762,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                             {(item.files ?? []).map(f => (
                               <span key={f.path} className="flex items-center gap-1 text-xs bg-slate-100 rounded px-2 py-0.5">
                                 <a href={`/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[160px] truncate">{f.name}</a>
+                                {f.uploadedAt && <span className="text-slate-400">{f.uploadedAt.slice(0, 10)}</span>}
                                 <button onClick={() => deleteFile(f.path, () => removeChecklistFile(project.id, item.id, f.path))} className="text-slate-300 hover:text-red-400 ml-0.5">×</button>
                               </span>
                             ))}
@@ -822,6 +823,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         {(doc.files ?? []).map(f => (
                           <span key={f.path} className="flex items-center gap-1 text-xs bg-slate-100 rounded px-2 py-0.5">
                             <a href={`/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[180px] truncate">{f.name}</a>
+                            {f.uploadedAt && <span className="text-slate-400">{f.uploadedAt.slice(0, 10)}</span>}
                             <button onClick={() => deleteFile(f.path, () => removeDocumentFile(project.id, doc.id, f.path))} className="text-slate-300 hover:text-red-400 ml-0.5">×</button>
                           </span>
                         ))}
