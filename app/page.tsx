@@ -285,6 +285,8 @@ export default function Dashboard() {
   const [showArchived, setShowArchived] = useState(false);
   const [taskSidebarOpen, setTaskSidebarOpen] = useState(false);
   const [expandedDocsId, setExpandedDocsId] = useState<string | null>(null);
+  const [expandedTasksId, setExpandedTasksId] = useState<string | null>(null);
+  const [copyConfirmId, setCopyConfirmId] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null);
   const [pauseModal, setPauseModal] = useState<{ projectId: string; reason: string; until: string } | null>(null);
 
@@ -406,59 +408,50 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Search + member filter */}
-          <div className="flex gap-3 mb-3 items-center">
+          {/* Search */}
+          <div className="mb-3">
             <input
               type="text"
               placeholder="Ieškoti pagal pavadinimą, adresą ar užsakovą..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400 bg-white"
+              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400 bg-white"
             />
-            <div className="flex gap-1.5 shrink-0">
-              {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => setMemberFilter(memberFilter === m.id ? null : m.id)}
-                  title={m.name}
-                  className={`text-xs font-semibold w-8 h-8 rounded-full transition-all ${
-                    memberFilter === m.id ? `${m.color} ${m.textColor} ring-2 ring-offset-1 ring-current` : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                  }`}
-                >
-                  {m.initials}
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* Stage filter */}
-          <div className="flex gap-1.5 flex-wrap mb-3">
+          {/* Stage filter + member filter + sort — one compact row */}
+          <div className="flex flex-wrap gap-1.5 items-center mb-6">
             {STAGES.map(s => (
               <button
                 key={s.id}
                 onClick={() => setStageFilter(stageFilter === s.id ? null : s.id)}
                 className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${s.bgClass} ${s.textClass} ${
-                  stageFilter === s.id
-                    ? `ring-2 ring-offset-1 ${s.colorClass} opacity-100`
-                    : 'opacity-50 hover:opacity-80'
+                  stageFilter === s.id ? `ring-2 ring-offset-1 ${s.colorClass} opacity-100` : 'opacity-50 hover:opacity-80'
                 }`}
               >
                 {s.shortName}
               </button>
             ))}
-          </div>
-
-          {/* Sort */}
-          <div className="flex items-center gap-2 mb-6">
-            <span className="text-xs text-slate-400 shrink-0">Rūšiuoti:</span>
+            <div className="w-px h-5 bg-slate-200 mx-1" />
+            {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => (
+              <button
+                key={m.id}
+                onClick={() => setMemberFilter(memberFilter === m.id ? null : m.id)}
+                title={m.name}
+                className={`text-xs font-semibold w-7 h-7 rounded-full transition-all ${
+                  memberFilter === m.id ? `${m.color} ${m.textColor} ring-2 ring-offset-1 ring-current` : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                }`}
+              >
+                {m.initials}
+              </button>
+            ))}
+            <div className="w-px h-5 bg-slate-200 mx-1" />
             {([['deadline', '⚠ Vėluojantys'], ['name', 'A–Z'], ['stage', 'Etapas']] as const).map(([val, label]) => (
               <button
                 key={val}
                 onClick={() => { setSortBy(val); localStorage.setItem('ka_sort', val); }}
-                className={`text-xs px-3 py-1 rounded-full border transition-all ${
-                  sortBy === val
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${
+                  sortBy === val ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
                 }`}
               >
                 {label}
@@ -715,25 +708,38 @@ export default function Dashboard() {
                       </svg>
                       {project.paused ? 'Pristabdyta' : 'Pristabdyti'}
                     </button>
-                    <button
-                      onClick={e => { e.preventDefault(); const copy = copyProject(project); router.push(`/projects/${copy.id}`); }}
-                      className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors"
-                      title="Kopijuoti projektą"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                      </svg>
-                      Kopijuoti
-                    </button>
+                    {copyConfirmId === project.id ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">Kopijuoti?</span>
+                        <button onClick={e => { e.preventDefault(); const copy = copyProject(project); setCopyConfirmId(null); router.push(`/projects/${copy.id}`); }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
+                        <button onClick={e => { e.preventDefault(); setCopyConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={e => { e.preventDefault(); setCopyConfirmId(project.id); }}
+                        className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors"
+                        title="Kopijuoti projektą"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        Kopijuoti
+                      </button>
+                    )}
                   </div>
 
                   {/* Veiksmų diagrama */}
-                  {(smartPlan.chain.length > 0 || smartPlan.parallel.length > 0) && (
+                  {(smartPlan.chain.length > 0 || smartPlan.parallel.length > 0) && (() => {
+                    const allTasks = [...smartPlan.chain, ...smartPlan.parallel];
+                    const isExpanded = expandedTasksId === project.id;
+                    const LIMIT = 3;
+                    const showAll = isExpanded || allTasks.length <= LIMIT;
+                    return (
                     <div className="px-5 pb-4 border-t border-slate-100 pt-3">
                       <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Šios dienos darbai</p>
                       <div style={{display:'block'}}>
                         {/* Sequential chain */}
-                        {smartPlan.chain.map((a, i) => {
+                        {smartPlan.chain.filter((_, i) => showAll || i < LIMIT).map((a, i) => {
                           const tsk = (project.taskStatuses ?? {})[a.taskKey] ?? {};
                           const blocked = !a.checkable;
                           return (
@@ -769,7 +775,7 @@ export default function Dashboard() {
                               </div>
                             )}
                             <div style={{display:'flex', flexDirection:'column', gap:'6px'}}>
-                              {smartPlan.parallel.map(a => {
+                              {smartPlan.parallel.filter((_, i) => showAll || smartPlan.chain.length + i < LIMIT).map(a => {
                                 const tsk = (project.taskStatuses ?? {})[a.taskKey] ?? {};
                                 return (
                                   <div key={a.taskKey} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -790,12 +796,20 @@ export default function Dashboard() {
                             </div>
                           </div>
                         )}
+                        {!showAll && allTasks.length > LIMIT && (
+                          <button onClick={e => { e.stopPropagation(); setExpandedTasksId(project.id); }} className="text-xs text-slate-400 hover:text-slate-600 mt-2 transition-colors">
+                            + {allTasks.length - LIMIT} daugiau...
+                          </button>
+                        )}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Quick stage toggles */}
-                  <div className="px-5 flex gap-1 flex-wrap border-t border-slate-200 pt-4 mt-3" style={{paddingBottom:'20px'}}>
+                  <div className="px-5 pb-4 border-t border-slate-100 pt-3">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Aktyvūs etapai</p>
+                    <div className="flex gap-1.5 flex-wrap">
                     {availableStages.map(s => {
                       const isOn = currentStageIds.includes(s.id);
                       const shortLabel = s.id === 'PP_VIESIMAS' ? 'Viešin.' : s.id === 'PAKARTOTINIS' ? 'Pakart.' : s.id === 'IP' ? 'IP' : s.id === 'EKSPERTIZE' ? 'Ekspert.' : s.shortName;
@@ -803,7 +817,7 @@ export default function Dashboard() {
                         <button
                           key={s.id}
                           onClick={e => { e.stopPropagation(); toggleStage(project.id, s.id); }}
-                          title={s.name}
+                          title={`${s.name} — spausti norėdami ${isOn ? 'išjungti' : 'įjungti'}`}
                           className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-all ${
                             isOn
                               ? `${s.bgClass} ${s.textClass} border-transparent`
@@ -814,6 +828,7 @@ export default function Dashboard() {
                         </button>
                       );
                     })}
+                    </div>
                   </div>
                 </div>
               );
