@@ -569,8 +569,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     {isCurrent && !status?.endDate && (
                       <button
                         onClick={() => {
-                          const today = new Date().toISOString().slice(0, 10);
-                          updateProject(project.id, { stageStatuses: { ...project.stageStatuses, [stage.id]: { ...status, endDate: today } } });
+                          // toggleStage now also sets endDate, so just call it
+                          toggleStage(project.id, stage.id as StageId);
                         }}
                         className="w-full mb-2 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1.5"
                       >
@@ -591,7 +591,26 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         <label className="text-xs text-slate-400 block mb-1">Faktas: pabaiga</label>
                         <div className="relative w-full" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
                           <span className="flex items-center gap-1.5 w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 cursor-pointer"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-slate-400"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{status?.endDate ? formatDate(status.endDate) : '—'}</span>
-                          <input type="date" value={status?.endDate ?? ''} onChange={e => updateProject(project.id, { stageStatuses: { ...project.stageStatuses, [stage.id]: { ...status, endDate: e.target.value } } })} className="absolute inset-0 opacity-0 w-full" />
+                          <input type="date" value={status?.endDate ?? ''} onChange={e => {
+                            const newEndDate = e.target.value;
+                            updateProject(project.id, { stageStatuses: { ...project.stageStatuses, [stage.id]: { ...status, endDate: newEndDate } } });
+                            // Sync activeStages: set endDate → remove from active; clear → add back
+                            const isCurrentlyActive = currentStages.includes(stage.id);
+                            if (newEndDate && isCurrentlyActive) {
+                              // Remove from active without resetting endDate (updateProject already set it)
+                              const next = currentStages.filter(s => s !== stage.id);
+                              updateProject(project.id, {
+                                activeStages: next,
+                                completedStages: [...new Set([...(project.completedStages ?? []), stage.id as StageId])],
+                              });
+                            } else if (!newEndDate && !isCurrentlyActive) {
+                              // Add back to active
+                              updateProject(project.id, {
+                                activeStages: [...currentStages, stage.id],
+                                completedStages: (project.completedStages ?? []).filter(s => s !== stage.id),
+                              });
+                            }
+                          }} className="absolute inset-0 opacity-0 w-full" />
                         </div>
                       </div>
                     </div>

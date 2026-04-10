@@ -325,20 +325,32 @@ export function useProjects() {
         if (p.id !== projectId) return p;
         const current = p.activeStages ?? ['SR'];
         const completed = p.completedStages ?? [];
+        const today = new Date().toISOString().slice(0, 10);
+        const stageStatuses = p.stageStatuses ?? {};
         let updatedProject: Project;
         if (current.includes(stage)) {
+          // Removing from active → mark completed + set endDate if not set
           const next = current.filter(s => s !== stage);
           updatedProject = {
             ...p,
             activeStages: next,
             completedStages: next.length > 0 ? [...new Set([...completed, stage])] : [],
+            stageStatuses: {
+              ...stageStatuses,
+              [stage]: { ...(stageStatuses[stage] ?? {}), endDate: stageStatuses[stage]?.endDate || today },
+            },
             updatedAt: new Date().toISOString(),
           };
         } else {
+          // Adding back to active → clear endDate
           updatedProject = {
             ...p,
             activeStages: [...current, stage],
             completedStages: completed.filter(s => s !== stage),
+            stageStatuses: {
+              ...stageStatuses,
+              [stage]: { ...(stageStatuses[stage] ?? {}), endDate: '' },
+            },
             updatedAt: new Date().toISOString(),
           };
         }
