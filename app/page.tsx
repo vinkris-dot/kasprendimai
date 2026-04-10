@@ -276,6 +276,10 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [memberFilter, setMemberFilter] = useState<TeamMemberId | null>(null);
   const [stageFilter, setStageFilter] = useState<StageId | null>(null);
+  const [sortBy, setSortBy] = useState<'deadline' | 'name' | 'stage'>(() => {
+    if (typeof window !== 'undefined') return (localStorage.getItem('ka_sort') as 'deadline' | 'name' | 'stage') ?? 'deadline';
+    return 'deadline';
+  });
   const [showFinished, setShowFinished] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -318,6 +322,21 @@ export default function Dashboard() {
   const thisWeek = alerts.filter(a => a.kind === 'week');
   const soon = alerts.filter(a => a.kind === 'next2weeks');
   const overdueProjectIds = new Set(overdue.map(a => a.projectId));
+
+  function sortProjects(list: Project[]) {
+    return [...list].sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name, 'lt');
+      if (sortBy === 'stage') {
+        const stageOrder = (p: Project) => Math.min(...(p.activeStages ?? ['SR']).map(s => STAGES.findIndex(st => st.id === s)));
+        return stageOrder(a) - stageOrder(b);
+      }
+      // deadline: overdue first, then by targetConstructionDate asc
+      const aOver = overdueProjectIds.has(a.id) ? 0 : 1;
+      const bOver = overdueProjectIds.has(b.id) ? 0 : 1;
+      if (aOver !== bOver) return aOver - bOver;
+      return new Date(a.targetConstructionDate).getTime() - new Date(b.targetConstructionDate).getTime();
+    });
+  }
 
   return (
     <div>
@@ -413,7 +432,7 @@ export default function Dashboard() {
           </div>
 
           {/* Stage filter */}
-          <div className="flex gap-1.5 flex-wrap mb-6">
+          <div className="flex gap-1.5 flex-wrap mb-3">
             {STAGES.map(s => (
               <button
                 key={s.id}
@@ -425,6 +444,24 @@ export default function Dashboard() {
                 }`}
               >
                 {s.shortName}
+              </button>
+            ))}
+          </div>
+
+          {/* Sort */}
+          <div className="flex items-center gap-2 mb-6">
+            <span className="text-xs text-slate-400 shrink-0">Rūšiuoti:</span>
+            {([['deadline', '⚠ Vėluojantys'], ['name', 'A–Z'], ['stage', 'Etapas']] as const).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => { setSortBy(val); localStorage.setItem('ka_sort', val); }}
+                className={`text-xs px-3 py-1 rounded-full border transition-all ${
+                  sortBy === val
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                }`}
+              >
+                {label}
               </button>
             ))}
           </div>
@@ -517,7 +554,7 @@ export default function Dashboard() {
 
           {/* Project cards */}
           <div className="grid gap-4">
-            {activeProjects.filter(p => {
+            {sortProjects(activeProjects).filter(p => {
               if (search.trim()) {
                 const q = search.toLowerCase();
                 if (!p.name.toLowerCase().includes(q) && !p.address.toLowerCase().includes(q) && !p.client.toLowerCase().includes(q)) return false;
