@@ -314,6 +314,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               </div>
             ) : (
               <div>
+                {project.projectNumber && (
+                  <p className="text-xs font-mono font-semibold text-slate-400 mb-1 tracking-wide">{project.projectNumber}</p>
+                )}
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-2xl font-semibold text-slate-900">{project.name}</h1>
                   {currentStages.length === 0 && (

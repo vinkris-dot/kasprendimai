@@ -163,6 +163,7 @@ export interface ManualTask {
 
 export interface Project {
   id: string;
+  projectNumber?: string;
   name: string;
   address: string;
   client: string;

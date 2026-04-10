@@ -7,6 +7,18 @@ import { useProjects } from '@/lib/useProjects';
 import { PROJECT_PARTS, DEFAULT_PARTS, calcTargetDate, formatDate } from '@/lib/defaultData';
 import { SelectedParts, PartId, ProjektavimoUzduotis, DEFAULT_PU } from '@/lib/types';
 
+function suggestProjectNumber(existingNumbers: (string | undefined)[]): string {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const prefix = `KAS ${yy}${mm}/`;
+  const used = existingNumbers
+    .filter((n): n is string => !!n && n.startsWith(prefix))
+    .map(n => parseInt(n.replace(prefix, '')) || 0);
+  const next = used.length > 0 ? Math.max(...used) + 1 : 1;
+  return `${prefix}${String(next).padStart(2, '0')}`;
+}
+
 const GROUP_LABELS: Record<string, string> = {
   pp: 'Projektiniai pasiūlymai',
   sld: 'Leidimas',
@@ -53,8 +65,10 @@ function RadioGroup({ label, value, options, onChange }: {
 
 export default function NewProject() {
   const router = useRouter();
-  const { addProject } = useProjects();
+  const { addProject, projects } = useProjects();
 
+  const suggested = useMemo(() => suggestProjectNumber(projects.map(p => p.projectNumber)), [projects]);
+  const [projectNumber, setProjectNumber] = useState('');
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [client, setClient] = useState('');
@@ -93,7 +107,7 @@ export default function NewProject() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !address || !client || !startDate) return;
-    const project = addProject({ name, address, client, clientEmail, startDate, selectedParts: parts, pu: showPU ? pu : undefined });
+    const project = addProject({ name, address, client, clientEmail, startDate, selectedParts: parts, pu: showPU ? pu : undefined, projectNumber: projectNumber.trim() || suggested });
     router.push(`/projects/${project.id}`);
   }
 
@@ -115,6 +129,24 @@ export default function NewProject() {
         {/* Basic info */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Projekto informacija</h2>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Projekto Nr.</label>
+            <div className="relative">
+              <input
+                value={projectNumber}
+                onChange={e => setProjectNumber(e.target.value)}
+                placeholder={suggested}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 font-mono"
+              />
+              {!projectNumber && (
+                <button type="button" onClick={() => setProjectNumber(suggested)} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700 transition-colors">
+                  naudoti {suggested}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-1">Formatas: KAS YYMM/NN — pvz. {suggested}</p>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Projekto pavadinimas *</label>

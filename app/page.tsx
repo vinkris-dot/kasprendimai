@@ -598,6 +598,7 @@ export default function Dashboard() {
                   <Link href={`/projects/${project.id}`} className="block p-5 pb-3">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
+                        {project.projectNumber && <span className="text-[10px] font-mono text-slate-400 font-medium">{project.projectNumber}</span>}
                         <h2 className="font-semibold text-slate-900 truncate">{project.name}</h2>
                         {project.address && project.address !== project.name && (
                           <p className="text-sm text-slate-500 mt-0.5 truncate">{project.address}</p>
