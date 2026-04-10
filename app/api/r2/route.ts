@@ -34,15 +34,19 @@ export async function GET(req: NextRequest) {
 
   try {
     const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-    const bodyArray = await response.Body?.transformToByteArray();
-    if (!bodyArray) return NextResponse.json({ error: 'Tuščias failas' }, { status: 404 });
-    const body = new Uint8Array(bodyArray.buffer, bodyArray.byteOffset, bodyArray.byteLength);
+    if (!response.Body) return NextResponse.json({ error: 'Tuščias failas' }, { status: 404 });
+
+    const bytes = await response.Body.transformToByteArray();
+    // Convert to Node Buffer (subclass of Uint8Array), then to ArrayBuffer for NextResponse
+    const nodeBuffer = Buffer.from(bytes);
+    const uint8 = new Uint8Array(nodeBuffer.buffer, nodeBuffer.byteOffset, nodeBuffer.byteLength);
 
     const ext = path.extname(key).toLowerCase();
     const contentType = CONTENT_TYPES[ext] ?? 'application/octet-stream';
     const filename = path.basename(key);
 
-    return new NextResponse(body as unknown as BodyInit, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return new NextResponse(uint8 as any, {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `inline; filename="${encodeURIComponent(filename)}"`,
