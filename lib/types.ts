@@ -71,8 +71,9 @@ export interface MotyvuotasAtsakymas {
   pastaba: string;           // savivaldybės pastaba
   atsakyta: boolean;
   atsakymas: string;         // mūsų atsakymas / veiksmai
-  terminasAtsakymui?: string;   // terminas atsakymui (pvz. +1 sav.)
-  terminasPataisymui?: string;  // terminas pataisymui (pvz. +2 sav.)
+  terminas?: string;            // terminas atsakymui / pataisymui
+  terminasAtsakymui?: string;   // @deprecated — buvo, paliekam backward compat
+  terminasPataisymui?: string;  // @deprecated
 }
 
 export interface StageInfo {

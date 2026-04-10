@@ -54,8 +54,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', address: '', client: '', clientEmail: '', startDate: '' });
   const [editParts, setEditParts] = useState<SelectedParts | null>(null);
-  const [newAtsakymas, setNewAtsakymas] = useState({ date: '', pastaba: '', atsakymas: '', terminasAtsakymui: '', terminasPataisymui: '' });
-  const [editAtsakymas, setEditAtsakymas] = useState({ date: '', pastaba: '', atsakymas: '', terminasAtsakymui: '', terminasPataisymui: '' });
+  const [newAtsakymas, setNewAtsakymas] = useState({ date: '', pastaba: '', atsakymas: '', terminas: '' });
+  const [editAtsakymas, setEditAtsakymas] = useState({ date: '', pastaba: '', atsakymas: '', terminas: '' });
   const [addingAtsakymas, setAddingAtsakymas] = useState(false);
   const [editingAtsakymasId, setEditingAtsakymasId] = useState<string | null>(null);
   const [folderStatus, setFolderStatus] = useState<'idle' | 'creating' | 'done' | 'error'>('idle');
@@ -926,10 +926,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <button
               onClick={() => {
               const today = new Date();
-              const plus7 = new Date(today); plus7.setDate(today.getDate() + 7);
               const plus14 = new Date(today); plus14.setDate(today.getDate() + 14);
               setAddingAtsakymas(true);
-              setNewAtsakymas({ date: today.toISOString().slice(0, 10), pastaba: '', atsakymas: '', terminasAtsakymui: plus7.toISOString().slice(0, 10), terminasPataisymui: plus14.toISOString().slice(0, 10) });
+              setNewAtsakymas({ date: today.toISOString().slice(0, 10), pastaba: '', atsakymas: '', terminas: plus14.toISOString().slice(0, 10) });
             }}
               className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg hover:bg-slate-700 transition-colors"
             >+ Pridėti</button>
@@ -944,15 +943,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   <input type="date" value={newAtsakymas.date} onChange={e => setNewAtsakymas(a => ({ ...a, date: e.target.value }))} className="absolute inset-0 opacity-0 w-full" />
                 </div>
               </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-xs text-slate-500 block mb-1">Terminas atsakymui</label>
-                  <input type="date" value={newAtsakymas.terminasAtsakymui} onChange={e => setNewAtsakymas(a => ({ ...a, terminasAtsakymui: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
-                </div>
-                <div className="flex-1">
-                  <label className="text-xs text-slate-500 block mb-1">Terminas pataisymui</label>
-                  <input type="date" value={newAtsakymas.terminasPataisymui} onChange={e => setNewAtsakymas(a => ({ ...a, terminasPataisymui: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
-                </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Terminas atsakymui / pataisymui</label>
+                <input type="date" value={newAtsakymas.terminas} onChange={e => setNewAtsakymas(a => ({ ...a, terminas: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
               </div>
               <div>
                 <label className="text-xs text-slate-500 block mb-1">Savivaldybės pastaba</label>
@@ -970,7 +963,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 <button
                   onClick={() => {
                     if (!newAtsakymas.pastaba.trim()) return;
-                    const item: MotyvuotasAtsakymas = { id: crypto.randomUUID(), atsakyta: false, ...newAtsakymas };
+                    const item: MotyvuotasAtsakymas = { id: crypto.randomUUID(), atsakyta: false, date: newAtsakymas.date, pastaba: newAtsakymas.pastaba, atsakymas: newAtsakymas.atsakymas, terminas: newAtsakymas.terminas };
                     updateMotyvuotiAtsakymai(project.id, [...(project.motyvuotiAtsakymai ?? []), item]);
                     setAddingAtsakymas(false);
                   }}
@@ -987,13 +980,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <div className="space-y-3">
               {(project.motyvuotiAtsakymai ?? []).map(item => {
                 const today = new Date().toISOString().slice(0, 10);
-                const tAtsakymas = item.terminasAtsakymui;
-                const tPataisymas = item.terminasPataisymui;
-                const atsakymasOverdue = tAtsakymas && !item.atsakyta && tAtsakymas < today;
-                const pataisymasOverdue = tPataisymas && !item.atsakyta && tPataisymas < today;
+                const terminas = item.terminas ?? item.terminasPataisymui ?? item.terminasAtsakymui;
+                const terminasOverdue = terminas && !item.atsakyta && terminas < today;
                 const isEditing = editingAtsakymasId === item.id;
                 return (
-                <div key={item.id} className={`bg-white rounded-xl border p-4 ${item.atsakyta ? 'border-green-200' : (atsakymasOverdue || pataisymasOverdue) ? 'border-red-200' : 'border-slate-200'}`}>
+                <div key={item.id} className={`bg-white rounded-xl border p-4 ${item.atsakyta ? 'border-green-200' : terminasOverdue ? 'border-red-200' : 'border-slate-200'}`}>
                   {isEditing ? (
                     /* ── Edit form ── */
                     <div className="space-y-3">
@@ -1003,12 +994,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           <input type="date" value={editAtsakymas.date} onChange={e => setEditAtsakymas(a => ({ ...a, date: e.target.value }))} className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
                         </div>
                         <div className="flex-1">
-                          <label className="text-xs text-slate-500 block mb-1">Terminas atsakymui</label>
-                          <input type="date" value={editAtsakymas.terminasAtsakymui} onChange={e => setEditAtsakymas(a => ({ ...a, terminasAtsakymui: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
-                        </div>
-                        <div className="flex-1">
-                          <label className="text-xs text-slate-500 block mb-1">Terminas pataisymui</label>
-                          <input type="date" value={editAtsakymas.terminasPataisymui} onChange={e => setEditAtsakymas(a => ({ ...a, terminasPataisymui: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
+                          <label className="text-xs text-slate-500 block mb-1">Terminas atsakymui / pataisymui</label>
+                          <input type="date" value={editAtsakymas.terminas} onChange={e => setEditAtsakymas(a => ({ ...a, terminas: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
                         </div>
                       </div>
                       <div>
@@ -1022,7 +1009,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       <div className="flex gap-2">
                         <button
                           onClick={() => {
-                            const updated = (project.motyvuotiAtsakymai ?? []).map(a => a.id === item.id ? { ...a, ...editAtsakymas } : a);
+                            const updated = (project.motyvuotiAtsakymai ?? []).map(a => a.id === item.id ? { ...a, date: editAtsakymas.date, pastaba: editAtsakymas.pastaba, atsakymas: editAtsakymas.atsakymas, terminas: editAtsakymas.terminas } : a);
                             updateMotyvuotiAtsakymai(project.id, updated);
                             setEditingAtsakymasId(null);
                           }}
@@ -1045,7 +1032,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           <button
                             onClick={() => {
                               setEditingAtsakymasId(item.id);
-                              setEditAtsakymas({ date: item.date, pastaba: item.pastaba, atsakymas: item.atsakymas ?? '', terminasAtsakymui: item.terminasAtsakymui ?? '', terminasPataisymui: item.terminasPataisymui ?? '' });
+                              const fallbackDate = new Date(item.date); fallbackDate.setDate(fallbackDate.getDate() + 14);
+                              setEditAtsakymas({ date: item.date, pastaba: item.pastaba, atsakymas: item.atsakymas ?? '', terminas: item.terminas ?? item.terminasPataisymui ?? item.terminasAtsakymui ?? fallbackDate.toISOString().slice(0, 10) });
                             }}
                             className="text-xs text-slate-400 hover:text-slate-700"
                           >Redaguoti</button>
@@ -1066,19 +1054,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           >✕</button>
                         </div>
                       </div>
-                      {/* Terminai */}
-                      {(tAtsakymas || tPataisymas) && (
-                        <div className="flex gap-3 mb-2">
-                          {tAtsakymas && (
-                            <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${atsakymasOverdue ? 'border-red-200 bg-red-50 text-red-500' : item.atsakyta ? 'border-green-200 bg-green-50 text-green-600' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
-                              Atsakymas iki {tAtsakymas}{atsakymasOverdue ? ' ⚠' : ''}
-                            </span>
-                          )}
-                          {tPataisymas && (
-                            <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${pataisymasOverdue ? 'border-red-200 bg-red-50 text-red-500' : item.atsakyta ? 'border-green-200 bg-green-50 text-green-600' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
-                              Pataisymas iki {tPataisymas}{pataisymasOverdue ? ' ⚠' : ''}
-                            </span>
-                          )}
+                      {/* Terminas */}
+                      {terminas && (
+                        <div className="mb-2">
+                          <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${terminasOverdue ? 'border-red-200 bg-red-50 text-red-500' : item.atsakyta ? 'border-green-200 bg-green-50 text-green-600' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                            Terminas iki {terminas}{terminasOverdue ? ' ⚠' : ''}
+                          </span>
                         </div>
                       )}
                       <p className="text-sm text-slate-700 mb-2 whitespace-pre-wrap">{item.pastaba}</p>
