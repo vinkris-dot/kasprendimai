@@ -41,6 +41,7 @@ export interface UploadedFile {
   name: string;
   path: string;
   uploadedAt: string;
+  url?: string; // R2 public URL (when available)
 }
 
 export interface ChecklistItem {

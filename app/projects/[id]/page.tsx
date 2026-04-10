@@ -173,7 +173,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       const res = await fetch('/api/upload', { method: 'POST', body: form });
       if (!res.ok) { onError(); return; }
       const data = await res.json();
-      onDone({ name: data.name, path: data.path, uploadedAt: new Date().toISOString() });
+      onDone({ name: data.name, path: data.path, uploadedAt: new Date().toISOString(), url: data.url ?? undefined });
     } catch { onError(); }
   }
 
@@ -784,7 +784,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           <div className="mt-2 ml-7 flex flex-wrap gap-1.5">
                             {(item.files ?? []).map(f => (
                               <span key={f.path} className="flex items-center gap-1 text-xs bg-slate-100 rounded px-2 py-0.5">
-                                <a href={`/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[160px] truncate">{f.name}</a>
+                                <a href={f.url ?? `/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[160px] truncate">{f.name}</a>
                                 {f.uploadedAt && <span className="text-slate-400">{f.uploadedAt.slice(0, 10)}</span>}
                                 <button onClick={() => deleteFile(f.path, () => removeChecklistFile(project.id, item.id, f.path))} className="text-slate-300 hover:text-red-400 ml-0.5">×</button>
                               </span>
@@ -845,7 +845,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {(doc.files ?? []).map(f => (
                           <span key={f.path} className="flex items-center gap-1 text-xs bg-slate-100 rounded px-2 py-0.5">
-                            <a href={`/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[180px] truncate">{f.name}</a>
+                            <a href={f.url ?? `/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[180px] truncate">{f.name}</a>
                             {f.uploadedAt && <span className="text-slate-400">{f.uploadedAt.slice(0, 10)}</span>}
                             <button onClick={() => deleteFile(f.path, () => removeDocumentFile(project.id, doc.id, f.path))} className="text-slate-300 hover:text-red-400 ml-0.5">×</button>
                           </span>
