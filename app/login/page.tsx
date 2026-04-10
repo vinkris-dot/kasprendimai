@@ -3,18 +3,17 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
-  const [pin, setPin] = useState(['', '', '', '']);
+  const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const [shaking, setShaking] = useState(false);
-  const inputs = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
-    inputs.current[0]?.focus();
+    inputRef.current?.focus();
   }, []);
 
   async function submit(fullPin: string) {
-    setError(false);
     const res = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -25,31 +24,20 @@ export default function LoginPage() {
     } else {
       setShaking(true);
       setError(true);
-      setPin(['', '', '', '']);
+      setPin('');
       setTimeout(() => {
         setShaking(false);
-        inputs.current[0]?.focus();
+        inputRef.current?.focus();
       }, 500);
     }
   }
 
-  function handleChange(i: number, val: string) {
-    if (!/^\d*$/.test(val)) return;
-    const newPin = [...pin];
-    newPin[i] = val.slice(-1);
-    setPin(newPin);
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+    setPin(val);
     setError(false);
-    if (val && i < 3) {
-      inputs.current[i + 1]?.focus();
-    }
-    if (newPin.every(d => d !== '') && newPin.join('').length === 4) {
-      submit(newPin.join(''));
-    }
-  }
-
-  function handleKeyDown(i: number, e: React.KeyboardEvent) {
-    if (e.key === 'Backspace' && !pin[i] && i > 0) {
-      inputs.current[i - 1]?.focus();
+    if (val.length === 4) {
+      submit(val);
     }
   }
 
@@ -61,20 +49,37 @@ export default function LoginPage() {
           <p className="text-slate-400 text-sm mt-1">Įveskite PIN kodą</p>
         </div>
 
-        <div className={`flex gap-3 ${shaking ? 'animate-shake' : ''}`}>
-          {pin.map((d, i) => (
-            <input
+        {/* Hidden real input */}
+        <input
+          ref={inputRef}
+          type="password"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoComplete="off"
+          maxLength={4}
+          value={pin}
+          onChange={handleChange}
+          className="absolute opacity-0 w-0 h-0"
+        />
+
+        {/* Visual PIN dots */}
+        <div
+          className={`flex gap-3 cursor-pointer ${shaking ? 'animate-shake' : ''}`}
+          onClick={() => inputRef.current?.focus()}
+        >
+          {[0, 1, 2, 3].map(i => (
+            <div
               key={i}
-              ref={el => { inputs.current[i] = el; }}
-              type="password"
-              inputMode="numeric"
-              maxLength={1}
-              value={d}
-              onChange={e => handleChange(i, e.target.value)}
-              onKeyDown={e => handleKeyDown(i, e)}
-              className={`w-14 h-14 text-center text-2xl font-bold rounded-xl border-2 outline-none transition-colors
-                ${error ? 'border-red-400 bg-red-50 text-red-500' : 'border-slate-200 focus:border-slate-900 bg-slate-50'}`}
-            />
+              className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-colors
+                ${error
+                  ? 'border-red-400 bg-red-50'
+                  : pin.length > i
+                    ? 'border-slate-900 bg-slate-900'
+                    : 'border-slate-200 bg-slate-50'
+                }`}
+            >
+              {pin.length > i && <span className="text-white">●</span>}
+            </div>
           ))}
         </div>
 
