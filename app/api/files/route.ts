@@ -10,7 +10,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Failas nerastas' }, { status: 404 });
   }
 
-  const buffer = fs.readFileSync(filePath);
   const ext = path.extname(filePath).toLowerCase();
   const contentTypes: Record<string, string> = {
     '.pdf': 'application/pdf',
@@ -23,10 +22,17 @@ export async function GET(req: NextRequest) {
   };
   const contentType = contentTypes[ext] ?? 'application/octet-stream';
 
-  return new NextResponse(buffer, {
-    headers: {
-      'Content-Type': contentType,
-      'Content-Disposition': `inline; filename="${path.basename(filePath)}"`,
-    },
-  });
+  try {
+    const buffer = fs.readFileSync(filePath);
+    // Convert Node Buffer → Uint8Array for NextResponse compatibility
+    const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    return new NextResponse(uint8, {
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `inline; filename="${encodeURIComponent(path.basename(filePath))}"`,
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: 'Nepavyko perskaityti failo' }, { status: 500 });
+  }
 }
