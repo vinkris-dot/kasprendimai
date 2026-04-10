@@ -108,7 +108,7 @@ function TaskGroup({ label, color, tasks, onDone, onDelete, onSetDueDate }: {
 export default function TasksSidebar({ projects, open, onToggle, updateProject }: {
   projects: Project[]; open: boolean; onToggle: () => void; updateProject: (id: string, data: Partial<Project>) => void;
 }) {
-  const [tab, setTab] = useState<'tasks' | 'notes'>('tasks');
+  const [notesOpen, setNotesOpen] = useState(false);
   const [addingFor, setAddingFor] = useState<string>('');
   const [newLabel, setNewLabel] = useState('');
   const [newAssignee, setNewAssignee] = useState<TeamMemberId | ''>('');
@@ -122,6 +122,20 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
   const groups = groupByUrgency(allTasks);
   const totalPending = allTasks.length;
   const pendingNotes = notes.filter(n => !n.done).length;
+
+  // Only one panel open at a time
+  function openTasks() {
+    setNotesOpen(false);
+    onToggle();
+  }
+  function openNotes() {
+    if (open) onToggle(); // close tasks if open
+    setNotesOpen(v => !v);
+  }
+  function closeAll() {
+    if (open) onToggle();
+    setNotesOpen(false);
+  }
 
   function markDone(t: TaskItem) {
     const project = projects.find(p => p.id === t.projectId);
@@ -154,155 +168,170 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
   }
 
   const activeProjects = projects.filter(p => !p.archived && (p.activeStages ?? []).length > 0);
+  const anyOpen = open || notesOpen;
 
   return (
     <>
-      {/* Toggle button */}
-      <button onClick={onToggle} className={`fixed right-0 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 py-4 px-2 rounded-l-xl shadow-md transition-all ${open ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-        {(totalPending + pendingNotes) > 0 && (
-          <span className={`text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center ${groups.overdue.length > 0 ? 'bg-red-500 text-white' : 'bg-amber-400 text-white'}`}>
-            {(totalPending + pendingNotes) > 99 ? '99+' : totalPending + pendingNotes}
-          </span>
-        )}
-        <span className="text-[9px] font-semibold uppercase tracking-wider [writing-mode:vertical-rl] rotate-180">Užduotys</span>
-      </button>
+      {/* ── Two stacked buttons on the right edge ── */}
+      <div className="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1">
 
-      {/* Sidebar panel */}
+        {/* Tasks button */}
+        <button
+          onClick={open ? onToggle : openTasks}
+          className={`flex flex-col items-center gap-1 py-4 px-2 rounded-l-xl shadow-md transition-all ${open ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          {totalPending > 0 && (
+            <span className={`text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center ${groups.overdue.length > 0 ? 'bg-red-500 text-white' : 'bg-amber-400 text-white'}`}>
+              {totalPending > 99 ? '99+' : totalPending}
+            </span>
+          )}
+          <span className="text-[9px] font-semibold uppercase tracking-wider [writing-mode:vertical-rl] rotate-180">Užduotys</span>
+        </button>
+
+        {/* Notes button */}
+        <button
+          onClick={openNotes}
+          className={`flex flex-col items-center gap-1 py-4 px-2 rounded-l-xl shadow-md transition-all ${notesOpen ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+          {pendingNotes > 0 && (
+            <span className="text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center bg-amber-400 text-white">
+              {pendingNotes > 99 ? '99+' : pendingNotes}
+            </span>
+          )}
+          <span className="text-[9px] font-semibold uppercase tracking-wider [writing-mode:vertical-rl] rotate-180">Užrašai</span>
+        </button>
+      </div>
+
+      {/* ── Tasks panel ── */}
       <div className={`fixed top-0 right-0 h-full w-80 bg-white border-l border-slate-200 shadow-xl z-30 flex flex-col transition-transform duration-200 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
-
-        {/* Header */}
-        <div className="px-4 pt-4 pb-0 border-b border-slate-100">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-slate-900 text-sm">
-              {tab === 'tasks' ? `Užduotys · ${totalPending}` : `Užrašai · ${notes.filter(n => !n.done).length}`}
-            </h2>
-            <button onClick={onToggle} className="text-slate-400 hover:text-slate-700 transition-colors p-1">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          {/* Tabs */}
-          <div className="flex gap-0">
-            <button onClick={() => setTab('tasks')} className={`flex-1 text-xs font-medium py-2 border-b-2 transition-colors ${tab === 'tasks' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
-              Projektų užduotys
-            </button>
-            <button onClick={() => { setTab('notes'); setTimeout(() => noteInputRef.current?.focus(), 100); }} className={`flex-1 text-xs font-medium py-2 border-b-2 transition-colors ${tab === 'notes' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
-              Užrašai
-              {pendingNotes > 0 && <span className="ml-1 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">{pendingNotes}</span>}
-            </button>
-          </div>
+        <div className="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="font-semibold text-slate-900 text-sm">Užduotys · {totalPending}</h2>
+          <button onClick={onToggle} className="text-slate-400 hover:text-slate-700 transition-colors p-1">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        {/* ── TASKS TAB ── */}
-        {tab === 'tasks' && (
-          <>
-            <div className="flex-1 overflow-y-auto px-4 py-3">
-              {totalPending === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-3xl mb-2">✅</div>
-                  <p className="text-sm text-slate-500 font-medium">Viskas atlikta!</p>
-                  <p className="text-xs text-slate-400 mt-1">Nėra laukiančių užduočių</p>
-                </div>
-              ) : (
-                <>
-                  <TaskGroup label="🔴 Vėluoja" color="text-red-500" tasks={groups.overdue} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
-                  <TaskGroup label="🟡 Šiandien" color="text-amber-500" tasks={groups.today} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
-                  <TaskGroup label="🟢 Ši savaitė" color="text-emerald-600" tasks={groups.thisWeek} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
-                  <TaskGroup label="📅 Vėliau / be termino" color="text-slate-400" tasks={groups.later} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
-                </>
-              )}
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {totalPending === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-3xl mb-2">✅</div>
+              <p className="text-sm text-slate-500 font-medium">Viskas atlikta!</p>
+              <p className="text-xs text-slate-400 mt-1">Nėra laukiančių užduočių</p>
             </div>
-            <div className="border-t border-slate-100 p-4">
-              {addingFor ? (
-                <div className="space-y-2">
-                  <input autoFocus value={newLabel} onChange={e => setNewLabel(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') addManualTask(); if (e.key === 'Escape') setAddingFor(''); }}
-                    placeholder="Užduoties aprašymas..." className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-slate-400" />
-                  <div className="flex gap-2">
-                    <select value={newAssignee} onChange={e => setNewAssignee(e.target.value as TeamMemberId | '')} className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-slate-400">
-                      <option value="">Atlikėjas...</option>
-                      {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
-                    <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-slate-400" />
-                  </div>
-                  <select value={addingFor} onChange={e => setAddingFor(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-slate-400">
-                    <option value="">Projektas...</option>
-                    {activeProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div className="flex gap-2">
-                    <button onClick={addManualTask} disabled={!newLabel.trim() || !addingFor} className="flex-1 bg-slate-900 text-white text-xs font-medium py-2 rounded-lg hover:bg-slate-700 disabled:opacity-40 transition-colors">Pridėti</button>
-                    <button onClick={() => { setAddingFor(''); setNewLabel(''); setNewAssignee(''); setNewDueDate(''); }} className="px-3 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg">Atšaukti</button>
-                  </div>
-                </div>
-              ) : (
-                <button onClick={() => setAddingFor(activeProjects[0]?.id ?? '')} className="w-full flex items-center justify-center gap-2 text-sm text-slate-500 hover:text-slate-800 border border-dashed border-slate-200 rounded-lg py-2.5 hover:border-slate-400 transition-colors">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                  Pridėti užduotį
-                </button>
-              )}
-            </div>
-          </>
-        )}
+          ) : (
+            <>
+              <TaskGroup label="🔴 Vėluoja" color="text-red-500" tasks={groups.overdue} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+              <TaskGroup label="🟡 Šiandien" color="text-amber-500" tasks={groups.today} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+              <TaskGroup label="🟢 Ši savaitė" color="text-emerald-600" tasks={groups.thisWeek} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+              <TaskGroup label="📅 Vėliau / be termino" color="text-slate-400" tasks={groups.later} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+            </>
+          )}
+        </div>
 
-        {/* ── NOTES TAB ── */}
-        {tab === 'notes' && (
-          <>
-            <div className="flex-1 overflow-y-auto px-4 py-3">
-              {/* New note input */}
-              <div className="flex gap-2 mb-4">
-                <input
-                  ref={noteInputRef}
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { addNote(newNote); setNewNote(''); } }}
-                  placeholder="Nauja mintis ar darbas..."
-                  className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-slate-400"
-                />
-                <button onClick={() => { addNote(newNote); setNewNote(''); }} disabled={!newNote.trim()} className="bg-slate-900 text-white text-xs px-3 rounded-lg hover:bg-slate-700 disabled:opacity-30 transition-colors">
-                  +
-                </button>
+        <div className="border-t border-slate-100 p-4">
+          {addingFor ? (
+            <div className="space-y-2">
+              <input autoFocus value={newLabel} onChange={e => setNewLabel(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addManualTask(); if (e.key === 'Escape') setAddingFor(''); }}
+                placeholder="Užduoties aprašymas..." className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-slate-400" />
+              <div className="flex gap-2">
+                <select value={newAssignee} onChange={e => setNewAssignee(e.target.value as TeamMemberId | '')} className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-slate-400">
+                  <option value="">Atlikėjas...</option>
+                  {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-slate-400" />
               </div>
+              <select value={addingFor} onChange={e => setAddingFor(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-slate-400">
+                <option value="">Projektas...</option>
+                {activeProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <div className="flex gap-2">
+                <button onClick={addManualTask} disabled={!newLabel.trim() || !addingFor} className="flex-1 bg-slate-900 text-white text-xs font-medium py-2 rounded-lg hover:bg-slate-700 disabled:opacity-40 transition-colors">Pridėti</button>
+                <button onClick={() => { setAddingFor(''); setNewLabel(''); setNewAssignee(''); setNewDueDate(''); }} className="px-3 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg">Atšaukti</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setAddingFor(activeProjects[0]?.id ?? '')} className="w-full flex items-center justify-center gap-2 text-sm text-slate-500 hover:text-slate-800 border border-dashed border-slate-200 rounded-lg py-2.5 hover:border-slate-400 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+              Pridėti užduotį
+            </button>
+          )}
+        </div>
+      </div>
 
-              {notes.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-xs">Nėra užrašų. Rašykite viršuje ↑</div>
-              ) : (
-                <div className="space-y-1">
-                  {/* Pending notes */}
-                  {notes.filter(n => !n.done).map(note => (
-                    <div key={note.id} className="flex items-start gap-2 py-2 border-b border-slate-100 group">
-                      <button onClick={() => toggleNote(note.id)} className="mt-0.5 shrink-0 w-4 h-4 rounded border-2 border-slate-300 hover:border-emerald-500 transition-colors cursor-pointer" />
-                      <span className="flex-1 text-sm text-slate-700 leading-snug">{note.text}</span>
+      {/* ── Notes panel ── */}
+      <div className={`fixed top-0 right-0 h-full w-80 bg-white border-l border-slate-200 shadow-xl z-30 flex flex-col transition-transform duration-200 ${notesOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="font-semibold text-slate-900 text-sm">Užrašai · {pendingNotes}</h2>
+          <button onClick={() => setNotesOpen(false)} className="text-slate-400 hover:text-slate-700 transition-colors p-1">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {/* New note input */}
+          <div className="flex gap-2 mb-4">
+            <input
+              ref={noteInputRef}
+              value={newNote}
+              onChange={e => setNewNote(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { addNote(newNote); setNewNote(''); } }}
+              placeholder="Nauja mintis ar darbas..."
+              className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-slate-400"
+            />
+            <button onClick={() => { addNote(newNote); setNewNote(''); }} disabled={!newNote.trim()} className="bg-slate-900 text-white text-xs px-3 rounded-lg hover:bg-slate-700 disabled:opacity-30 transition-colors">
+              +
+            </button>
+          </div>
+
+          {notes.length === 0 ? (
+            <div className="text-center py-8 text-slate-400 text-xs">Nėra užrašų. Rašykite viršuje ↑</div>
+          ) : (
+            <div className="space-y-1">
+              {/* Pending notes */}
+              {notes.filter(n => !n.done).map(note => (
+                <div key={note.id} className="flex items-start gap-2 py-2 border-b border-slate-100 group">
+                  <button
+                    onClick={() => toggleNote(note.id)}
+                    title="Pažymėti kaip sureaguota"
+                    className="mt-0.5 shrink-0 w-4 h-4 rounded border-2 border-slate-300 hover:border-emerald-500 transition-colors cursor-pointer"
+                  />
+                  <span className="flex-1 text-sm text-slate-700 leading-snug">{note.text}</span>
+                  <button onClick={() => deleteNote(note.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all text-sm leading-none mt-0.5">×</button>
+                </div>
+              ))}
+              {/* Done / sureaguota notes */}
+              {notes.filter(n => n.done).length > 0 && (
+                <div className="mt-4">
+                  <p className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider mb-2">Sureaguota</p>
+                  {notes.filter(n => n.done).map(note => (
+                    <div key={note.id} className="flex items-start gap-2 py-2 border-b border-slate-100 group opacity-50">
+                      <button onClick={() => toggleNote(note.id)} className="mt-0.5 shrink-0 w-4 h-4 rounded border-2 border-emerald-400 bg-emerald-400 transition-colors cursor-pointer flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      </button>
+                      <span className="flex-1 text-sm text-slate-400 line-through leading-snug">{note.text}</span>
                       <button onClick={() => deleteNote(note.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all text-sm leading-none mt-0.5">×</button>
                     </div>
                   ))}
-                  {/* Done notes */}
-                  {notes.filter(n => n.done).length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider mb-2">Atlikta</p>
-                      {notes.filter(n => n.done).map(note => (
-                        <div key={note.id} className="flex items-start gap-2 py-2 border-b border-slate-100 group opacity-50">
-                          <button onClick={() => toggleNote(note.id)} className="mt-0.5 shrink-0 w-4 h-4 rounded border-2 border-emerald-400 bg-emerald-400 transition-colors cursor-pointer flex items-center justify-center">
-                            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                          </button>
-                          <span className="flex-1 text-sm text-slate-400 line-through leading-snug">{note.text}</span>
-                          <button onClick={() => deleteNote(note.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all text-sm leading-none mt-0.5">×</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Backdrop */}
-      {open && <div className="fixed inset-0 z-20 bg-black/10" onClick={onToggle} />}
+      {anyOpen && <div className="fixed inset-0 z-20 bg-black/10" onClick={closeAll} />}
     </>
   );
 }

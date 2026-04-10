@@ -68,9 +68,11 @@ export interface DocumentItem {
 export interface MotyvuotasAtsakymas {
   id: string;
   date: string;
-  pastaba: string;       // savivaldybės pastaba
+  pastaba: string;           // savivaldybės pastaba
   atsakyta: boolean;
-  atsakymas: string;     // mūsų atsakymas / veiksmai
+  atsakymas: string;         // mūsų atsakymas / veiksmai
+  terminasAtsakymui?: string;   // terminas atsakymui (pvz. +1 sav.)
+  terminasPataisymui?: string;  // terminas pataisymui (pvz. +2 sav.)
 }
 
 export interface StageInfo {
