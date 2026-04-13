@@ -21,15 +21,34 @@ async function fetchFromSupabase(): Promise<Project[]> {
   return data.map((row: { data: Project }) => row.data);
 }
 
+function validStageIds(sp: SelectedParts): StageId[] {
+  const ids: StageId[] = ['SR'];
+  if (sp.PP) ids.push('PP');
+  if (sp.VIESIMAS) ids.push('PP_VIESIMAS');
+  if (sp.IP) ids.push('IP');
+  if (sp.SLD) ids.push('SLD');
+  if (sp.PAKARTOTINIS) ids.push('PAKARTOTINIS');
+  if (sp.TDP) ids.push('TDP');
+  if (sp.EKSPERTIZE) ids.push('EKSPERTIZE');
+  return ids;
+}
+
 function migrateProject(p: Project): Project {
   const existingIds = new Set(p.dokumentai.map(d => d.id));
   const newDocs = DEFAULT_DOKUMENTAI
     .filter(d => !existingIds.has(d.id))
     .map(d => ({ ...d, received: false, notes: '' }));
+  const mergedSelectedParts = Object.assign(
+    { IP: false, PAKARTOTINIS: false, EKSPERTIZE: (p.selectedParts as any)?.TDP ?? false },
+    p.selectedParts
+  ) as SelectedParts;
+  const valid = validStageIds(mergedSelectedParts);
+  const rawActive = p.activeStages ?? [(p as any).currentStage ?? 'SR'];
+  const sanitizedActive = rawActive.filter((s: string) => valid.includes(s as StageId));
   return {
     ...p,
     clientEmail: p.clientEmail ?? '',
-    activeStages: p.activeStages ?? [(p as any).currentStage ?? 'SR'],
+    activeStages: sanitizedActive.length > 0 ? sanitizedActive : ['SR'],
     motyvuotiAtsakymai: p.motyvuotiAtsakymai ?? [],
     dokumentai: (() => {
       const merged = [
@@ -50,10 +69,7 @@ function migrateProject(p: Project): Project {
       const def = DEFAULT_PP_BYLA.find(pp => pp.id === item.id);
       return def?.subfolder && !item.subfolder ? { ...item, subfolder: def.subfolder } : item;
     }),
-    selectedParts: Object.assign(
-      { IP: false, PAKARTOTINIS: false, EKSPERTIZE: (p.selectedParts as any)?.TDP ?? false },
-      p.selectedParts
-    ) as SelectedParts,
+    selectedParts: mergedSelectedParts,
     partStatuses: p.partStatuses ?? {},
     completedStages: p.completedStages ?? [],
     stageAssignees: p.stageAssignees ?? { ...DEFAULT_STAGE_ASSIGNEES },
@@ -339,6 +355,7 @@ export function useProjects() {
               ...stageStatuses,
               [stage]: { ...(stageStatuses[stage] ?? {}), endDate: stageStatuses[stage]?.endDate || today },
             },
+            ...(stage === 'PAKARTOTINIS' ? { pakartotinisRounds: (p.pakartotinisRounds ?? 0) + 1 } : {}),
             updatedAt: new Date().toISOString(),
           };
         } else if (completed.includes(stage)) {
@@ -468,6 +485,88 @@ export function useProjects() {
     });
   }, []);
 
+  const addKitasDok = useCallback((projectId: string, name: string) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const newDoc: import('./types').DocumentItem = {
+          id: `kitas-${Date.now()}`,
+          number: String((p.kitiDokumentai ?? []).length + 1),
+          name,
+          description: '',
+          subfolder: 'DOKUMENTAI/KITI',
+          received: false,
+          notes: '',
+          files: [],
+        };
+        const updatedProject = {
+          ...p,
+          kitiDokumentai: [...(p.kitiDokumentai ?? []), newDoc],
+          updatedAt: new Date().toISOString(),
+        };
+        upsertToSupabase(updatedProject).catch(() => {});
+        return updatedProject;
+      });
+      saveToLocalStorage(updated);
+      return updated;
+    });
+  }, []);
+
+  const removeKitasDok = useCallback((projectId: string, docId: string) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const updatedProject = {
+          ...p,
+          kitiDokumentai: (p.kitiDokumentai ?? []).filter(d => d.id !== docId),
+          updatedAt: new Date().toISOString(),
+        };
+        upsertToSupabase(updatedProject).catch(() => {});
+        return updatedProject;
+      });
+      saveToLocalStorage(updated);
+      return updated;
+    });
+  }, []);
+
+  const addKitasDokFile = useCallback((projectId: string, docId: string, file: import('./types').UploadedFile) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const updatedProject = {
+          ...p,
+          kitiDokumentai: (p.kitiDokumentai ?? []).map(doc =>
+            doc.id === docId ? { ...doc, files: [...(doc.files ?? []), file] } : doc
+          ),
+          updatedAt: new Date().toISOString(),
+        };
+        upsertToSupabase(updatedProject).catch(() => {});
+        return updatedProject;
+      });
+      saveToLocalStorage(updated);
+      return updated;
+    });
+  }, []);
+
+  const removeKitasDokFile = useCallback((projectId: string, docId: string, filePath: string) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const updatedProject = {
+          ...p,
+          kitiDokumentai: (p.kitiDokumentai ?? []).map(doc =>
+            doc.id === docId ? { ...doc, files: (doc.files ?? []).filter(f => f.path !== filePath) } : doc
+          ),
+          updatedAt: new Date().toISOString(),
+        };
+        upsertToSupabase(updatedProject).catch(() => {});
+        return updatedProject;
+      });
+      saveToLocalStorage(updated);
+      return updated;
+    });
+  }, []);
+
   const removeChecklistFile = useCallback((projectId: string, itemId: string, filePath: string) => {
     setProjects(prev => {
       const updated = prev.map(p => {
@@ -477,6 +576,60 @@ export function useProjects() {
           ppByla: p.ppByla.map(item =>
             item.id === itemId ? { ...item, files: (item.files ?? []).filter(f => f.path !== filePath) } : item
           ),
+          updatedAt: new Date().toISOString(),
+        };
+        upsertToSupabase(updatedProject).catch(() => {});
+        return updatedProject;
+      });
+      saveToLocalStorage(updated);
+      return updated;
+    });
+  }, []);
+
+  const updateBylaSection = useCallback((projectId: string, sectionId: string, done: boolean) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const existing = p.bylos?.[sectionId] ?? { done: false, files: [] };
+        const updatedProject = {
+          ...p,
+          bylos: { ...(p.bylos ?? {}), [sectionId]: { ...existing, done } },
+          updatedAt: new Date().toISOString(),
+        };
+        upsertToSupabase(updatedProject).catch(() => {});
+        return updatedProject;
+      });
+      saveToLocalStorage(updated);
+      return updated;
+    });
+  }, []);
+
+  const addBylaFile = useCallback((projectId: string, sectionId: string, file: import('./types').UploadedFile) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const existing = p.bylos?.[sectionId] ?? { done: false, files: [] };
+        const updatedProject = {
+          ...p,
+          bylos: { ...(p.bylos ?? {}), [sectionId]: { ...existing, files: [...existing.files, file] } },
+          updatedAt: new Date().toISOString(),
+        };
+        upsertToSupabase(updatedProject).catch(() => {});
+        return updatedProject;
+      });
+      saveToLocalStorage(updated);
+      return updated;
+    });
+  }, []);
+
+  const removeBylaFile = useCallback((projectId: string, sectionId: string, filePath: string) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const existing = p.bylos?.[sectionId] ?? { done: false, files: [] };
+        const updatedProject = {
+          ...p,
+          bylos: { ...(p.bylos ?? {}), [sectionId]: { ...existing, files: existing.files.filter(f => f.path !== filePath) } },
           updatedAt: new Date().toISOString(),
         };
         upsertToSupabase(updatedProject).catch(() => {});
@@ -505,5 +658,12 @@ export function useProjects() {
     addChecklistFile,
     removeDocumentFile,
     removeChecklistFile,
+    addKitasDok,
+    removeKitasDok,
+    addKitasDokFile,
+    removeKitasDokFile,
+    updateBylaSection,
+    addBylaFile,
+    removeBylaFile,
   };
 }
