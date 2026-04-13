@@ -386,6 +386,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               <button
                 key={stage.id}
                 onClick={() => toggleStage(project.id, stage.id as StageId)}
+                title={isCurrent ? 'Paspausti → pažymėti baigtu' : completedStages.includes(stage.id as StageId) ? 'Paspausti → pašalinti' : 'Paspausti → pradėti'}
                 className={`text-xs px-3 py-1.5 rounded-full font-medium border-2 transition-all ${
                   isCurrent
                     ? `${stage.bgClass} ${stage.textClass} ${stage.colorClass}`

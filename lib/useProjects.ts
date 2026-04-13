@@ -329,7 +329,7 @@ export function useProjects() {
         const stageStatuses = p.stageStatuses ?? {};
         let updatedProject: Project;
         if (current.includes(stage)) {
-          // Removing from active → mark completed + set endDate if not set
+          // active → completed: remove from active, add to completed, set endDate
           const next = current.filter(s => s !== stage);
           updatedProject = {
             ...p,
@@ -341,8 +341,20 @@ export function useProjects() {
             },
             updatedAt: new Date().toISOString(),
           };
+        } else if (completed.includes(stage)) {
+          // completed → inactive: remove entirely, clear endDate
+          updatedProject = {
+            ...p,
+            activeStages: current,
+            completedStages: completed.filter(s => s !== stage),
+            stageStatuses: {
+              ...stageStatuses,
+              [stage]: { ...(stageStatuses[stage] ?? {}), endDate: '' },
+            },
+            updatedAt: new Date().toISOString(),
+          };
         } else {
-          // Adding back to active → clear endDate
+          // inactive → active: add to active, clear endDate
           updatedProject = {
             ...p,
             activeStages: [...current, stage],
