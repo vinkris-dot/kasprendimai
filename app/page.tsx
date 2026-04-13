@@ -22,15 +22,24 @@ function getActiveStageIds(project: Project) {
   return ids;
 }
 
+function inferDoneStages(project: Project, available: StageId[]): StageId[] {
+  const completed = (project.completedStages ?? []) as StageId[];
+  const active = (project.activeStages ?? ['SR']) as StageId[];
+  const minActiveIdx = Math.min(...active.map(s => available.indexOf(s)).filter(i => i >= 0));
+  return available.filter((sid, idx) => idx < minActiveIdx || completed.includes(sid));
+}
+
 function progressPercent(project: Project) {
-  const total = project.ppByla.length + project.dokumentai.length;
-  const done = project.ppByla.filter(i => i.done).length + project.dokumentai.filter(d => d.received).length;
-  return total > 0 ? Math.round((done / total) * 100) : 0;
+  const available = getActiveStageIds(project).filter(s => s !== 'PAKARTOTINIS');
+  if (available.length === 0) return 0;
+  const done = inferDoneStages(project, available).length;
+  return Math.round((done / available.length) * 100);
 }
 
 function stageLabels(project: Project) {
   const active = project.activeStages ?? ['SR'];
-  return STAGES.filter(s => active.includes(s.id));
+  const available = getActiveStageIds(project);
+  return STAGES.filter(s => active.includes(s.id) && available.includes(s.id));
 }
 
 function missingDocCount(project: Project) {

@@ -90,10 +90,14 @@ export default function KlientasPage({ params }: { params: Promise<{ id: string 
     return project.targetConstructionDate;
   })();
 
-  // Compute progress % (based on how many stages are completed)
-  const totalStages = activeStages.length;
-  const doneCount = completedStages.filter(s => activeStageIds.includes(s as StageId)).length;
-  const progressPct = totalStages > 0 ? Math.round((doneCount / totalStages) * 100) : 0;
+  // Compute progress % — exclude PAKARTOTINIS (sub-stage of SLD, shouldn't inflate total)
+  const progressStageIds = activeStageIds.filter(s => s !== 'PAKARTOTINIS');
+  const minActiveIdx = Math.min(...currentStages.map(s => progressStageIds.indexOf(s as StageId)).filter(i => i >= 0));
+  const inferredDone = progressStageIds.filter((sid, idx) =>
+    idx < minActiveIdx || completedStages.includes(sid)
+  );
+  const totalStages = progressStageIds.length;
+  const progressPct = totalStages > 0 ? Math.round((inferredDone.length / totalStages) * 100) : 0;
 
   return (
     <div className="bg-white min-h-screen">
@@ -167,75 +171,131 @@ export default function KlientasPage({ params }: { params: Promise<{ id: string 
         <div className="mb-10">
           <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Projekto etapai</h2>
           <div className="space-y-0">
-            {activeStages.map((stage, idx) => {
-              const isDone = completedStages.includes(stage.id);
+            {activeStages.filter(s => s.id !== 'PAKARTOTINIS').map((stage, idx, arr) => {
+              const isDone = inferredDone.includes(stage.id as StageId);
               const isActive = currentStages.includes(stage.id);
               const planned = plannedDates[stage.id];
               const effective = effectiveDates[stage.id];
               const displayDates = effective ?? planned;
-              const isLast = idx === activeStages.length - 1;
+              const isLast = idx === arr.length - 1;
+              const mainNumber = idx + 1;
+
+              // Pakartotinis sub-stages (shown nested under SLD)
+              const showPakartotinis = stage.id === 'SLD' && activeStageIds.includes('PAKARTOTINIS');
+              const pakIsDone = completedStages.includes('PAKARTOTINIS');
+              const pakIsActive = currentStages.includes('PAKARTOTINIS');
+              const completedRounds = project.pakartotinisRounds ?? 0;
+              const rounds = completedRounds + (pakIsActive && completedRounds > 0 ? 1 : 0);
+              const pakPlanned = plannedDates['PAKARTOTINIS'];
+              const pakEffective = effectiveDates['PAKARTOTINIS'];
+              const pakDates = pakEffective ?? pakPlanned;
 
               return (
-                <div key={stage.id} className="flex gap-4">
-                  {/* Timeline column */}
-                  <div className="flex flex-col items-center">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 ${
-                      isDone
-                        ? 'bg-slate-800 border-slate-800 text-white'
-                        : isActive
-                        ? 'bg-white border-slate-800 text-slate-800'
-                        : 'bg-white border-slate-200 text-slate-300'
-                    }`}>
-                      {isDone ? (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <span className="text-xs font-bold">{idx + 1}</span>
-                      )}
-                    </div>
-                    {!isLast && (
-                      <div className={`w-0.5 flex-1 my-1 ${isDone ? 'bg-slate-800' : 'bg-slate-200'}`} style={{ minHeight: '20px' }} />
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className={`pb-5 flex-1 min-w-0 ${isLast ? '' : ''}`}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className={`font-semibold text-sm leading-tight ${
-                          isDone ? 'text-slate-500 line-through' : isActive ? 'text-slate-900' : 'text-slate-400'
-                        }`}>
-                          {STAGE_CLIENT_NAMES[stage.id] ?? stage.name}
-                        </p>
-                        {STAGE_CLIENT_DESC[stage.id] && !isDone && (
-                          <p className={`text-xs mt-0.5 ${isActive ? 'text-slate-500' : 'text-slate-300'}`}>
-                            {STAGE_CLIENT_DESC[stage.id]}
-                          </p>
-                        )}
-                        {isActive && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mt-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Vykdoma
-                          </span>
+                <div key={stage.id}>
+                  <div className="flex gap-4">
+                    {/* Timeline column */}
+                    <div className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 ${
+                        isDone
+                          ? 'bg-slate-800 border-slate-800 text-white'
+                          : isActive
+                          ? 'bg-white border-slate-800 text-slate-800'
+                          : 'bg-white border-slate-200 text-slate-300'
+                      }`}>
+                        {isDone ? (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <span className="text-xs font-bold">{mainNumber}</span>
                         )}
                       </div>
-                      {displayDates && (
-                        <div className="text-right shrink-0">
-                          {isDone ? (
-                            <p className="text-xs text-slate-400">
-                              Baigta {formatDate(displayDates.endDate)}
-                            </p>
-                          ) : (
-                            <>
-                              <p className="text-xs text-slate-400">{formatDate(displayDates.startDate)}</p>
-                              <p className="text-xs text-slate-400">– {formatDate(displayDates.endDate)}</p>
-                            </>
-                          )}
-                        </div>
+                      {(!isLast || showPakartotinis) && (
+                        <div className={`w-0.5 flex-1 my-1 ${isDone ? 'bg-slate-800' : 'bg-slate-200'}`} style={{ minHeight: '20px' }} />
                       )}
                     </div>
+
+                    {/* Content */}
+                    <div className={`${showPakartotinis ? 'pb-2' : 'pb-5'} flex-1 min-w-0`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className={`font-semibold text-sm leading-tight ${
+                            isDone ? 'text-slate-500 line-through' : isActive ? 'text-slate-900' : 'text-slate-400'
+                          }`}>
+                            {STAGE_CLIENT_NAMES[stage.id] ?? stage.name}
+                          </p>
+                          {STAGE_CLIENT_DESC[stage.id] && !isDone && (
+                            <p className={`text-xs mt-0.5 ${isActive ? 'text-slate-500' : 'text-slate-300'}`}>
+                              {STAGE_CLIENT_DESC[stage.id]}
+                            </p>
+                          )}
+                          {isActive && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mt-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Vykdoma
+                            </span>
+                          )}
+                        </div>
+                        {displayDates && (
+                          <div className="text-right shrink-0">
+                            {isDone ? (
+                              <p className="text-xs text-slate-400">Baigta {formatDate(displayDates.endDate)}</p>
+                            ) : (
+                              <>
+                                <p className="text-xs text-slate-400">{formatDate(displayDates.startDate)}</p>
+                                <p className="text-xs text-slate-400">– {formatDate(displayDates.endDate)}</p>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Pakartotinis nested under SLD */}
+                  {showPakartotinis && (
+                    <div className="flex gap-4 ml-4">
+                      <div className="flex flex-col items-center">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border-2 text-[10px] font-bold ${
+                          pakIsDone
+                            ? 'bg-slate-600 border-slate-600 text-white'
+                            : pakIsActive
+                            ? 'bg-white border-slate-600 text-slate-600'
+                            : 'bg-white border-slate-200 text-slate-300'
+                        }`}>
+                          {pakIsDone ? '✓' : '↺'}
+                        </div>
+                        {!isLast && (
+                          <div className={`w-0.5 flex-1 my-1 ${pakIsDone ? 'bg-slate-600' : 'bg-slate-200'}`} style={{ minHeight: '20px' }} />
+                        )}
+                      </div>
+                      <div className="pb-5 flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className={`text-sm leading-tight ${
+                              pakIsDone ? 'text-slate-400 line-through' : pakIsActive ? 'text-slate-700 font-medium' : 'text-slate-300'
+                            }`}>
+                              Pakartotinis derinimas{rounds > 1 ? ` (${rounds} ratai)` : rounds === 1 ? ' (1 ratas)' : ''}
+                            </p>
+                            {!pakIsDone && (
+                              <p className={`text-xs mt-0.5 ${pakIsActive ? 'text-slate-500' : 'text-slate-300'}`}>
+                                Papildomas derinimo ratas pagal pastabas
+                              </p>
+                            )}
+                            {pakIsActive && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full mt-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                Vykdoma
+                              </span>
+                            )}
+                          </div>
+                          {pakDates && pakIsDone && (
+                            <p className="text-xs text-slate-400 shrink-0">Baigta {formatDate(pakDates.endDate)}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
