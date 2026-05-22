@@ -4,8 +4,20 @@ import { use, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
-import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, TEAM_MEMBERS } from '@/lib/defaultData';
-import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU } from '@/lib/types';
+import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, TEAM_MEMBERS } from '@/lib/defaultData';
+import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU, BylaSection, CustomPart } from '@/lib/types';
+
+const BYLA_SECTIONS: { id: string; label: string; partKey: string }[] = [
+  { id: 'PP',  label: 'PP – Projektiniai pasiūlymai', partKey: 'PP' },
+  { id: 'IP',  label: 'Išankstiniai pritarimai',       partKey: 'IP' },
+  { id: 'SLD', label: 'SLD – Statybos leidimas',       partKey: 'SLD' },
+  { id: 'TDP', label: 'TDP – Techninis darbo projektas', partKey: 'TDP' },
+  { id: 'BD',  label: 'BD – Bendroji dalis',           partKey: 'BD' },
+  { id: 'SP',  label: 'SP – Sklypo planas',             partKey: 'SP' },
+  { id: 'SA',  label: 'SA – Architektūrinė dalis',     partKey: 'SA' },
+  { id: 'SK',  label: 'SK – Konstrukcijų dalis',       partKey: 'SK' },
+  { id: 'LVN', label: 'LVN',                           partKey: 'LVN' },
+];
 
 const GROUP_LABELS: Record<string, string> = {
   pp: 'Projektiniai pasiūlymai',
@@ -14,7 +26,7 @@ const GROUP_LABELS: Record<string, string> = {
   other: 'Kita',
 };
 
-type Tab = 'grafikas' | 'pp' | 'dokumentai' | 'motyvuoti' | 'pastabos' | 'pu';
+type Tab = 'grafikas' | 'pp' | 'dokumentai' | 'motyvuoti' | 'pastabos' | 'pu' | 'bylos';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'I. Tekstinė ir dokumentų dalis': '📄',
@@ -24,7 +36,9 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 /** Determine which stages to show based on selected project parts */
 function getActiveStages(selectedParts: import('@/lib/types').SelectedParts) {
-  const show: StageId[] = ['SR'];
+  const show: StageId[] = [];
+  if (selectedParts.DP) show.push('DP');
+  show.push('SR');
   if (selectedParts.PP) show.push('PP');
   if (selectedParts.VIESIMAS) show.push('PP_VIESIMAS');
   if (selectedParts.IP) show.push('IP');
@@ -44,6 +58,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     toggleStage, updateProject, deleteProject, updateMotyvuotiAtsakymai,
     updateConnectionDate,
     addDocumentFile, addChecklistFile, removeDocumentFile, removeChecklistFile,
+    addKitasDok, removeKitasDok, addKitasDokFile, removeKitasDokFile,
+    updateBylaSection, addBylaFile, removeBylaFile,
   } = useProjects();
 
   const [tab, setTab] = useState<Tab>('grafikas');
@@ -54,16 +70,20 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', address: '', client: '', clientEmail: '', startDate: '' });
   const [editParts, setEditParts] = useState<SelectedParts | null>(null);
+  const [editCustomParts, setEditCustomParts] = useState<CustomPart[]>([]);
+  const [newCustomPart, setNewCustomPart] = useState({ name: '', weeks: 2, parallel: false });
   const [newAtsakymas, setNewAtsakymas] = useState({ date: '', pastaba: '', atsakymas: '', terminas: '' });
   const [editAtsakymas, setEditAtsakymas] = useState({ date: '', pastaba: '', atsakymas: '', terminas: '' });
   const [addingAtsakymas, setAddingAtsakymas] = useState(false);
   const [editingAtsakymasId, setEditingAtsakymasId] = useState<string | null>(null);
   const [folderStatus, setFolderStatus] = useState<'idle' | 'creating' | 'done' | 'error'>('idle');
+  const [addingKitas, setAddingKitas] = useState(false);
+  const [newKitasName, setNewKitasName] = useState('');
 
   const editPreviewDate = useMemo(() => {
     if (!editing || !editParts || !editForm.startDate) return '';
-    return calcTargetDate(editForm.startDate, editParts);
-  }, [editing, editParts, editForm.startDate]);
+    return calcTargetDate(editForm.startDate, editParts, editCustomParts);
+  }, [editing, editParts, editForm.startDate, editCustomParts]);
 
   if (!loaded) return null;
 
@@ -78,7 +98,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   }
 
   const selectedParts = project.selectedParts ?? {
-    PP: true, VIESIMAS: false, SLD: true, TDP: true,
+    DP: false, DP_days: 84, PP: true, VIESIMAS: false, SLD: true, TDP: true,
     BD: false, SP: false, SA: false, LVN: false, KITA: false, KITA_days: 14,
   };
 
@@ -88,8 +108,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const completedStages = project.completedStages ?? [];
   const minActiveIndex = Math.min(...currentStages.map(s => activeStages.findIndex(a => a.id === s)).filter(i => i >= 0));
 
-  const plannedDates = calcStageDates(project.startDate, selectedParts);
-  const effectiveDates = calcEffectiveStageDates(project.startDate, selectedParts, project.stageStatuses ?? {});
+  const customParts = project.customParts ?? [];
+  const plannedDates = calcStageDates(project.startDate, selectedParts, customParts);
+  const effectiveDates = calcEffectiveStageDates(project.startDate, selectedParts, project.stageStatuses ?? {}, customParts);
+  const customPartDates = calcCustomPartDates(project.startDate, selectedParts, customParts);
   // Efektyvi statybos pradžios data — paskutinio aktyvaus etapo prognozuojama pabaiga
   const effectiveTargetDate = (() => {
     const stageOrder: StageId[] = ['SR', 'PP', 'PP_VIESIMAS', 'IP', 'SLD', 'TDP', 'PAKARTOTINIS', 'EKSPERTIZE'];
@@ -142,14 +164,28 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   function handleEditOpen() {
     setEditForm({ name: project!.name, address: project!.address, client: project!.client, clientEmail: project!.clientEmail ?? '', startDate: project!.startDate });
     setEditParts({ ...project!.selectedParts });
+    setEditCustomParts((project!.customParts ?? []).map(c => ({ ...c })));
+    setNewCustomPart({ name: '', weeks: 2, parallel: false });
     setEditing(true);
   }
 
   function handleEditSave() {
     const parts = editParts ?? project!.selectedParts;
-    const newTarget = calcTargetDate(editForm.startDate, parts);
-    updateProject(project!.id, { ...editForm, selectedParts: parts, targetConstructionDate: newTarget });
+    const newTarget = calcTargetDate(editForm.startDate, parts, editCustomParts);
+    updateProject(project!.id, { ...editForm, selectedParts: parts, customParts: editCustomParts, targetConstructionDate: newTarget });
     setEditing(false);
+  }
+
+  function addCustomPart() {
+    const name = newCustomPart.name.trim();
+    const weeks = Number(newCustomPart.weeks) || 0;
+    if (!name || weeks <= 0) return;
+    setEditCustomParts(parts => [...parts, { id: crypto.randomUUID(), name, weeks, parallel: newCustomPart.parallel }]);
+    setNewCustomPart({ name: '', weeks: 2, parallel: false });
+  }
+
+  function removeCustomPart(id: string) {
+    setEditCustomParts(parts => parts.filter(c => c.id !== id));
   }
 
   function toggleEditPart(id: PartId) {
@@ -204,13 +240,23 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     }
   }
 
+  const activeBylaSections = BYLA_SECTIONS.filter(s => selectedParts[s.partKey as keyof SelectedParts]);
+  const bylaTotal = activeBylaSections.length + 1; // +1 for Kiti (always shown but optional — skip in count)
+  const allRequiredSections = activeBylaSections;
+  const bylaDone = allRequiredSections.filter(s => {
+    const sec = project.bylos?.[s.id];
+    return sec?.done || (sec?.files ?? []).length > 0;
+  }).length;
+  const isBylosComplete = bylaDone === allRequiredSections.length;
+
   const tabs: { id: Tab; label: string }[] = [
     { id: 'grafikas', label: 'Grafikas' },
-    { id: 'pp', label: `PP sąrašas (${ppDone}/${project.ppByla.length})` },
-    { id: 'dokumentai', label: `Dokumentai (${docsDone}/${project.dokumentai.length})` },
-    { id: 'motyvuoti', label: `Mot. atsakymai${project.motyvuotiAtsakymai.length > 0 ? ` (${project.motyvuotiAtsakymai.length})` : ''}` },
-    { id: 'pastabos', label: 'Pastabos' },
     { id: 'pu', label: 'PU' },
+    { id: 'dokumentai', label: `Dokumentai (${docsDone}/${project.dokumentai.length})` },
+    { id: 'pp', label: `PP sąrašas (${ppDone}/${project.ppByla.length})` },
+    { id: 'motyvuoti', label: `Mot. atsakymai${project.motyvuotiAtsakymai.length > 0 ? ` (${project.motyvuotiAtsakymai.length})` : ''}` },
+    { id: 'bylos', label: `Bylos${isBylosComplete ? ' ✓' : ` (${bylaDone}/${allRequiredSections.length})`}` },
+    { id: 'pastabos', label: 'Pastabos' },
   ];
 
   return (
@@ -284,14 +330,75 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               <input type="checkbox" className="hidden" checked={checked} onChange={() => toggleEditPart(part.id as PartId)} />
                               {part.label}
                               <span className={`font-normal ${checked ? 'text-slate-400' : 'text-slate-400'}`}>
-                                {part.durationDays / 7} sav.
+                                {part.id === 'DP' ? Math.round((editParts.DP_days || 84) / 7) : part.durationDays / 7} sav.
                               </span>
                             </label>
                           );
                         })}
                       </div>
+                      {group === 'pp' && editParts.DP && (
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <span className="text-xs text-slate-400">DP trukmė:</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={26}
+                            value={Math.round((editParts.DP_days || 84) / 7)}
+                            onChange={e => setEditParts(p => p ? { ...p, DP_days: (Number(e.target.value) || 1) * 7 } : p)}
+                            className="w-16 text-xs border border-slate-200 rounded-lg px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          />
+                          <span className="text-xs text-slate-400">sav. (lygiagrečiai su SR+PP)</span>
+                        </div>
+                      )}
                     </div>
                   ))}
+
+                  {/* Papildomos dalys (rankiniu būdu) */}
+                  <div className="mt-1 pt-3 border-t border-slate-200">
+                    <p className="text-xs text-slate-400 mb-2">Papildomos dalys</p>
+                    {editCustomParts.length > 0 && (
+                      <div className="space-y-1.5 mb-2">
+                        {editCustomParts.map(c => (
+                          <div key={c.id} className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+                            <span className="text-xs font-medium text-slate-700 flex-1 truncate">{c.name}</span>
+                            <span className="text-xs text-slate-400">{c.weeks} sav.</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${c.parallel ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                              {c.parallel ? '⇄ lygiagrečiai' : '→ nuosekli'}
+                            </span>
+                            <button onClick={() => removeCustomPart(c.id)} className="text-slate-300 hover:text-red-400 text-base leading-none">×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        value={newCustomPart.name}
+                        onChange={e => setNewCustomPart(c => ({ ...c, name: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomPart(); } }}
+                        placeholder="Dalies pavadinimas"
+                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      />
+                      <input
+                        type="number"
+                        min={1}
+                        value={newCustomPart.weeks}
+                        onChange={e => setNewCustomPart(c => ({ ...c, weeks: Number(e.target.value) }))}
+                        className="w-14 text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                      />
+                      <span className="text-xs text-slate-400">sav.</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+                        <input type="checkbox" checked={newCustomPart.parallel} onChange={e => setNewCustomPart(c => ({ ...c, parallel: e.target.checked }))} className="accent-indigo-600" />
+                        Lygiagrečiai (TDP bloke, po SP/SA)
+                      </label>
+                      <button
+                        onClick={addCustomPart}
+                        disabled={!newCustomPart.name.trim() || newCustomPart.weeks <= 0}
+                        className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >+ Pridėti dalį</button>
+                    </div>
+                  </div>
 
                   {/* Live date preview */}
                   {editPreviewDate && (
@@ -308,7 +415,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <button onClick={() => setEditing(false)} className="text-xs text-slate-500 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50">Atšaukti</button>
                   </div>
                   <div className="flex gap-3">
-                    <button onClick={() => { updateProject(project!.id, { archived: !project!.archived }); setEditing(false); }} className="text-xs text-slate-400 hover:text-slate-700 transition-colors">{project!.archived ? '↩ Atarchyvuoti' : '📦 Archyvuoti'}</button>
+                    <button
+                      onClick={() => { updateProject(project!.id, { archived: !project!.archived }); setEditing(false); }}
+                      title={!project!.archived && !isBylosComplete ? `Bylose trūksta ${allRequiredSections.length - bylaDone} dok.` : undefined}
+                      className={`text-xs transition-colors ${!project!.archived && !isBylosComplete ? 'text-amber-500 hover:text-amber-700' : 'text-slate-400 hover:text-slate-700'}`}
+                    >{project!.archived ? '↩ Atarchyvuoti' : `📦 Archyvuoti${!isBylosComplete ? ` ⚠ (${bylaDone}/${allRequiredSections.length})` : ''}`}</button>
                     <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">Ištrinti projektą</button>
                   </div>
                 </div>
@@ -365,6 +476,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         {PROJECT_PARTS.filter(p => selectedParts[p.id]).map(p => (
           <span key={p.id} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full font-medium">
             {p.label}
+          </span>
+        ))}
+        {customParts.map(c => (
+          <span key={c.id} className={`text-xs px-2 py-1 rounded-full font-medium ${c.parallel ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-600'}`}>
+            {c.name} <span className="opacity-60">{c.weeks} sav.{c.parallel ? ' ⇄' : ''}</span>
           </span>
         ))}
       </div>
@@ -633,7 +749,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                                 onClick={() => {
                                   if (bdDisabled) return;
                                   const newParts = { ...selectedParts, [p.id]: !active };
-                                  const newTarget = calcTargetDate(project.startDate, newParts);
+                                  const newTarget = calcTargetDate(project.startDate, newParts, customParts);
                                   updateProject(project.id, { selectedParts: newParts, targetConstructionDate: newTarget });
                                 }}
                                 className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-all ${
@@ -683,6 +799,34 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                             </div>
                           );
                         })}
+                        {/* Lygiagrečios papildomos dalys (po SP/SA) */}
+                        {customParts.filter(c => c.parallel).map(c => {
+                          const planned = customPartDates[c.id];
+                          const done = !!c.endDate;
+                          return (
+                            <div key={c.id} className={`flex items-center gap-3 rounded-lg px-2.5 py-2 border transition-all ${done ? 'bg-green-50 border-green-100' : 'bg-indigo-50/40 border-indigo-100'}`}>
+                              <button
+                                onClick={() => updateProject(project.id, { customParts: customParts.map(x => x.id === c.id ? { ...x, endDate: done ? '' : new Date().toISOString().slice(0, 10) } : x) })}
+                                className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${done ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 hover:border-indigo-400'}`}
+                              >
+                                {done && <span className="text-xs">✓</span>}
+                              </button>
+                              <span className={`text-xs font-semibold shrink-0 max-w-[120px] truncate ${done ? 'text-green-600' : 'text-indigo-700'}`} title={c.name}>{c.name}</span>
+                              <span className="text-[10px] text-indigo-400 shrink-0">⇄ {c.weeks} sav.</span>
+                              {planned && (
+                                <span className={`text-xs flex-1 ${done ? 'text-green-500 line-through' : 'text-slate-400'}`}>
+                                  {formatDate(planned.startDate)} → {formatDate(planned.endDate)}
+                                </span>
+                              )}
+                              {done && (
+                                <div className="relative shrink-0" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
+                                  <span className="flex items-center gap-1 border border-green-200 rounded px-1.5 py-0.5 text-xs text-green-700 bg-white w-32 cursor-pointer"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{c.endDate ? formatDate(c.endDate) : '—'}</span>
+                                  <input type="date" value={c.endDate ?? ''} onChange={e => updateProject(project.id, { customParts: customParts.map(x => x.id === c.id ? { ...x, endDate: e.target.value } : x) })} className="absolute inset-0 opacity-0 w-full" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -710,6 +854,44 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none text-slate-700 placeholder-slate-300"
                     />
                   </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Nuoseklios papildomos dalys */}
+          {customParts.filter(c => !c.parallel).map(c => {
+            const planned = customPartDates[c.id];
+            const done = !!c.endDate;
+            return (
+              <div key={c.id} className="bg-white rounded-xl border-l-4 border-slate-300 border border-slate-200 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Papildoma</span>
+                    <span className="font-medium text-sm text-slate-800">{c.name}</span>
+                    {done && <span className="text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">✓ Baigta</span>}
+                  </div>
+                  <span className="text-xs text-slate-400">{c.weeks} sav.</span>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {planned && (
+                    <div className="flex items-center gap-3 text-xs bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                      <span className="text-slate-400 font-medium shrink-0">Planas:</span>
+                      <span className="text-slate-600 whitespace-nowrap">{formatDate(planned.startDate)}</span>
+                      <span className="text-slate-300">→</span>
+                      <span className="text-slate-600 whitespace-nowrap">{formatDate(planned.endDate)}</span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => updateProject(project.id, { customParts: customParts.map(x => x.id === c.id ? { ...x, endDate: done ? '' : new Date().toISOString().slice(0, 10) } : x) })}
+                    className={`text-xs px-3 py-2 rounded-lg font-medium transition-colors ${done ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                  >{done ? '↩ Atžymėti' : '✓ Baigti'}</button>
+                  {done && (
+                    <div className="relative shrink-0" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
+                      <span className="flex items-center gap-1 border border-green-200 rounded px-2 py-1 text-xs text-green-700 bg-white w-32 cursor-pointer"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{c.endDate ? formatDate(c.endDate) : '—'}</span>
+                      <input type="date" value={c.endDate ?? ''} onChange={e => updateProject(project.id, { customParts: customParts.map(x => x.id === c.id ? { ...x, endDate: e.target.value } : x) })} className="absolute inset-0 opacity-0 w-full" />
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -913,6 +1095,79 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Kiti dokumentai */}
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">Kiti</h3>
+            <div className="space-y-2">
+              {(project.kitiDokumentai ?? []).map((doc, idx) => (
+                <div key={doc.id} className="bg-white rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs font-mono text-slate-400 mt-0.5 flex-shrink-0">{idx + 1}.</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-slate-800 flex-1">{doc.name}</span>
+                        <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
+                          <input type="file" className="hidden" onChange={e => {
+                            const f = e.target.files?.[0]; if (!f) return;
+                            uploadFile(f, 'DOKUMENTAI/KITI', doc.name, uf => addKitasDokFile(project.id, doc.id, uf), () => alert('Klaida įkeliant failą'));
+                            e.target.value = '';
+                          }} />
+                          📎
+                        </label>
+                        <button onClick={() => removeKitasDok(project.id, doc.id)} className="text-slate-300 hover:text-red-400 flex-shrink-0 text-base leading-none">×</button>
+                      </div>
+                      {(doc.files ?? []).length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {(doc.files ?? []).map(f => (
+                            <span key={f.path} className="flex items-center gap-1 text-xs bg-slate-100 rounded px-2 py-0.5">
+                              <a href={f.url ?? `/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[180px] truncate">{f.name}</a>
+                              {f.uploadedAt && <span className="text-slate-400">{f.uploadedAt.slice(0, 10)}</span>}
+                              <button onClick={() => deleteFile(f.path, () => removeKitasDokFile(project.id, doc.id, f.path))} className="text-slate-300 hover:text-red-400 ml-0.5">×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {addingKitas ? (
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="text"
+                  value={newKitasName}
+                  onChange={e => setNewKitasName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newKitasName.trim()) {
+                      addKitasDok(project.id, newKitasName.trim());
+                      setNewKitasName('');
+                      setAddingKitas(false);
+                    }
+                    if (e.key === 'Escape') { setAddingKitas(false); setNewKitasName(''); }
+                  }}
+                  autoFocus
+                  placeholder="Dokumento pavadinimas..."
+                  className="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+                <button
+                  onClick={() => {
+                    if (newKitasName.trim()) addKitasDok(project.id, newKitasName.trim());
+                    setNewKitasName('');
+                    setAddingKitas(false);
+                  }}
+                  className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg"
+                >Pridėti</button>
+                <button onClick={() => { setAddingKitas(false); setNewKitasName(''); }} className="text-xs text-slate-500">Atšaukti</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingKitas(true)}
+                className="mt-2 text-xs text-slate-500 hover:text-slate-800 border border-dashed border-slate-200 hover:border-slate-400 rounded-lg px-3 py-2 w-full transition-colors"
+              >+ Pridėti</button>
+            )}
           </div>
 
           {/* Missing summary */}
@@ -1125,6 +1380,99 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
       {tab === 'pu' && (
         <PUTab pu={project.pu ?? { ...DEFAULT_PU }} onChange={pu => updateProject(project.id, { pu })} project={project} />
+      )}
+
+      {/* BYLOS */}
+      {tab === 'bylos' && (
+        <div>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-5 text-xs text-slate-600">
+            <strong>📁 Suderinti ir gauti dokumentai</strong> — sukelkite galutinius projektų failus. Kol visi skyriai neužbaigti, projektas rodomas kaip nebaigtas.
+          </div>
+
+          {!isBylosComplete && (
+            <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+              ⚠ Trūksta {allRequiredSections.length - bylaDone} iš {allRequiredSections.length} skyrių — projekto archyvuoti negalima.
+            </div>
+          )}
+          {isBylosComplete && (
+            <div className="mb-4 bg-green-50 border border-green-200 rounded-xl p-3 text-xs text-green-800">
+              ✓ Visi skyriai užbaigti — projektas paruoštas archyvavimui.
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {activeBylaSections.map(sec => {
+              const byla = project.bylos?.[sec.id] ?? { done: false, files: [] };
+              const complete = byla.done || byla.files.length > 0;
+              return (
+                <div key={sec.id} className={`bg-white rounded-xl border p-4 transition-colors ${complete ? 'border-green-200' : 'border-slate-200'}`}>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <input
+                      type="checkbox"
+                      checked={byla.done || byla.files.length > 0}
+                      onChange={() => updateBylaSection(project.id, sec.id, !byla.done)}
+                      className="h-4 w-4 accent-green-600 flex-shrink-0"
+                      title="Pažymėti kaip užbaigtą be failo"
+                    />
+                    <span className={`text-sm font-medium flex-1 ${complete ? 'text-slate-400' : 'text-slate-800'}`}>{sec.label}</span>
+                    <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
+                      <input type="file" className="hidden" multiple onChange={e => {
+                        Array.from(e.target.files ?? []).forEach(f => {
+                          uploadFile(f, `BYLOS/${sec.id}`, f.name, uf => addBylaFile(project.id, sec.id, uf), () => alert('Klaida įkeliant failą'));
+                        });
+                        e.target.value = '';
+                      }} />
+                      📎
+                    </label>
+                  </div>
+                  {byla.files.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 ml-7">
+                      {byla.files.map(f => (
+                        <span key={f.path} className="flex items-center gap-1 text-xs bg-slate-100 rounded px-2 py-0.5">
+                          <a href={f.url ?? `/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[200px] truncate">{f.name}</a>
+                          {f.uploadedAt && <span className="text-slate-400">{f.uploadedAt.slice(0, 10)}</span>}
+                          <button onClick={() => deleteFile(f.path, () => removeBylaFile(project.id, sec.id, f.path))} className="text-slate-300 hover:text-red-400 ml-0.5">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Kiti — always shown, optional */}
+            {(() => {
+              const byla = project.bylos?.['KITI'] ?? { done: false, files: [] };
+              return (
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-500 flex-1">Kiti dokumentai</span>
+                    <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
+                      <input type="file" className="hidden" multiple onChange={e => {
+                        Array.from(e.target.files ?? []).forEach(f => {
+                          uploadFile(f, 'BYLOS/KITI', f.name, uf => addBylaFile(project.id, 'KITI', uf), () => alert('Klaida įkeliant failą'));
+                        });
+                        e.target.value = '';
+                      }} />
+                      📎
+                    </label>
+                  </div>
+                  {byla.files.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {byla.files.map(f => (
+                        <span key={f.path} className="flex items-center gap-1 text-xs bg-slate-100 rounded px-2 py-0.5">
+                          <a href={f.url ?? `/api/files?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline max-w-[200px] truncate">{f.name}</a>
+                          {f.uploadedAt && <span className="text-slate-400">{f.uploadedAt.slice(0, 10)}</span>}
+                          <button onClick={() => deleteFile(f.path, () => removeBylaFile(project.id, 'KITI', f.path))} className="text-slate-300 hover:text-red-400 ml-0.5">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,10 +1,52 @@
-import { StageInfo, ChecklistItem, DocumentItem, PartConfig, SelectedParts, TeamMember } from './types';
+import { StageInfo, ChecklistItem, DocumentItem, PartConfig, SelectedParts, TeamMember, CustomPart } from './types';
+
+/**
+ * Lygiagrečių papildomų dalių prefiksas TDP bloke: kiek dienų praeina iki
+ * SP ir SA pabaigos (po jų prasideda lygiagrečios papildomos dalys).
+ */
+function tdpSpSaPrefixDays(parts: SelectedParts): number {
+  if (!parts.TDP) return 0;
+  // Subdalys rodomos nuo TDP bloko pradžios (BD → SP → SA). Lygiagreti dalis
+  // prasideda baigus SA — t.y. po BD+SP+SA trukmės (be atskiros TDP bazės).
+  let prefix = 0;
+  if (parts.BD) prefix += 7;
+  if (parts.SP) prefix += 7;
+  if (parts.SA) prefix += 14;
+  return prefix;
+}
+
+/** TDP bloko trukmė įskaitant lygiagrečias papildomas dalis (po SP/SA). */
+function tdpBlockDays(parts: SelectedParts, customParts: CustomPart[] = []): number {
+  let tdpDays = 0;
+  if (parts.TDP) {
+    tdpDays += 14;
+    if (parts.BD) tdpDays += 7;
+    if (parts.SP) tdpDays += 7;
+    if (parts.SA) tdpDays += 14;
+    if (parts.SK) tdpDays += 28;
+    if (parts.LVN) tdpDays += 7;
+  }
+  const parallelCustom = customParts.filter(c => c.parallel && c.weeks > 0);
+  if (parallelCustom.length) {
+    const prefix = tdpSpSaPrefixDays(parts);
+    const maxPar = Math.max(...parallelCustom.map(c => c.weeks * 7));
+    tdpDays = Math.max(tdpDays, prefix + maxPar);
+  }
+  return tdpDays;
+}
 
 // ---------------------------------------------------------------------------
 // PROJECT PARTS – selectable, durations in calendar days
 // ---------------------------------------------------------------------------
 
 export const PROJECT_PARTS: PartConfig[] = [
+  {
+    id: 'DP',
+    label: 'DP',
+    description: 'Detalusis planas (lygiagrečiai su SR+PP)',
+    durationDays: 84, // 12 sav. numatyta; keičiama per DP_days
+    group: 'pp',
+  },
   {
     id: 'PP',
     label: 'PP',
@@ -79,7 +121,7 @@ export const PROJECT_PARTS: PartConfig[] = [
     id: 'PAKARTOTINIS',
     label: 'Pakartotinis derinimas',
     description: 'Papildomas SLD derinimo ratas',
-    durationDays: 21, // 3 sav.
+    durationDays: 28, // 1 sav. pataisymai + 3 sav. derinimas
     group: 'sld',
   },
   {
@@ -99,6 +141,8 @@ export const PROJECT_PARTS: PartConfig[] = [
 ];
 
 export const DEFAULT_PARTS: SelectedParts = {
+  DP: false,
+  DP_days: 84,
   PP: true,
   VIESIMAS: false,
   IP: false,
@@ -124,40 +168,37 @@ const EKSPERTIZE_DAYS = 28;
  * Apskaičiuoja tikslinę statybos pradžios datą.
  * TDP vyksta LYGIAGREČIAI su PP, todėl imamas maksimumas iš PP bloko ir TDP bloko.
  */
-export function calcTargetDate(startDate: string, parts: SelectedParts): string {
+export function calcTargetDate(startDate: string, parts: SelectedParts, customParts: CustomPart[] = []): string {
   if (!startDate) return '';
 
   const start = new Date(startDate);
 
-  // 1. SR (visada)
-  let total = SR_DAYS;
+  // 1. SR + PP blokas (nuoseklus): SR + PP + Viešinimas + Išankstiniai pritarimai
+  let preSLD = SR_DAYS;
+  if (parts.PP) preSLD += 56;
+  if (parts.VIESIMAS) preSLD += 35;
+  if (parts.IP) preSLD += 28;
 
-  // 2. PP blokas (nuoseklus): PP + Viešinimas + Išankstiniai pritarimai
-  if (parts.PP) total += 56;
-  if (parts.VIESIMAS) total += 35;
-  if (parts.IP) total += 28;
+  // 2. DP vyksta LYGIAGREČIAI su SR+PP bloku — pastumia SLD/TDP tik jei ilgesnis
+  let total = parts.DP ? Math.max(preSLD, parts.DP_days || 84) : preSLD;
 
-  // 3. SLD ir TDP vyksta LYGIAGREČIAI — imamas maksimumas
-  let sldDays = parts.SLD ? 42 : 0;
-  let tdpDays = 0;
-  if (parts.TDP) {
-    tdpDays += 14;
-    if (parts.BD) tdpDays += 7;
-    if (parts.SP) tdpDays += 7;
-    if (parts.SA) tdpDays += 14;
-    if (parts.SK) tdpDays += 28;
-    if (parts.LVN) tdpDays += 7;
-  }
-  total += Math.max(sldDays, tdpDays);
+  // 3. SLD ir TDP vyksta LYGIAGREČIAI — imamas maksimumas (TDP įskaito lygiagrečias papildomas dalis)
+  const sldDays = parts.SLD ? 42 : 0;
+  total += Math.max(sldDays, tdpBlockDays(parts, customParts));
 
   // 4. Pakartotinis derinimas – po SLD
-  if (parts.PAKARTOTINIS) total += 21;
+  if (parts.PAKARTOTINIS) total += 28;
 
   // 5. Ekspertizė – tik jei pasirinkta
   if (parts.EKSPERTIZE) total += EKSPERTIZE_DAYS;
 
   // 5. Kita
   if (parts.KITA) total += parts.KITA_days || 14;
+
+  // 6. Nuoseklios papildomos dalys – prie grandinės pabaigos
+  for (const c of customParts) {
+    if (!c.parallel && c.weeks > 0) total += c.weeks * 7;
+  }
 
   const target = new Date(start);
   target.setDate(target.getDate() + total);
@@ -168,7 +209,7 @@ export function calcTargetDate(startDate: string, parts: SelectedParts): string 
  * Apskaičiuoja kiekvieno etapo planuojamas pradžios ir pabaigos datas.
  * TDP vyksta lygiagrečiai su SLD.
  */
-export function calcStageDates(startDate: string, parts: SelectedParts): Partial<Record<import('./types').StageId, { startDate: string; endDate: string }>> {
+export function calcStageDates(startDate: string, parts: SelectedParts, customParts: CustomPart[] = []): Partial<Record<import('./types').StageId, { startDate: string; endDate: string }>> {
   if (!startDate) return {};
 
   const addDays = (date: Date, days: number) => {
@@ -180,6 +221,11 @@ export function calcStageDates(startDate: string, parts: SelectedParts): Partial
 
   const result: Partial<Record<import('./types').StageId, { startDate: string; endDate: string }>> = {};
   let cursor = new Date(startDate);
+
+  // DP (lygiagrečiai su SR+PP, nuo projekto pradžios)
+  if (parts.DP) {
+    result['DP'] = { startDate: fmt(new Date(startDate)), endDate: fmt(addDays(new Date(startDate), parts.DP_days || 84)) };
+  }
 
   // SR (visada, 21 d.)
   result['SR'] = { startDate: fmt(cursor), endDate: fmt(addDays(cursor, 35)) };
@@ -203,6 +249,12 @@ export function calcStageDates(startDate: string, parts: SelectedParts): Partial
     cursor = addDays(cursor, 28);
   }
 
+  // DP gali pastumti SLD/TDP pradžią, jei tęsiasi ilgiau nei SR+PP blokas
+  if (parts.DP) {
+    const dpEnd = addDays(new Date(startDate), parts.DP_days || 84);
+    if (dpEnd > cursor) cursor = dpEnd;
+  }
+
   // SLD ir TDP lygiagrečiai
   const parallelStart = new Date(cursor);
   const sldDays = parts.SLD ? 42 : 0;
@@ -223,17 +275,70 @@ export function calcStageDates(startDate: string, parts: SelectedParts): Partial
     result['TDP'] = { startDate: fmt(parallelStart), endDate: fmt(addDays(parallelStart, tdpDays)) };
   }
 
-  cursor = addDays(cursor, Math.max(sldDays, tdpDays));
+  // Bloko pabaiga įskaito lygiagrečias papildomas dalis (po SP/SA TDP bloke)
+  cursor = addDays(cursor, Math.max(sldDays, tdpBlockDays(parts, customParts)));
 
   // Pakartotinis derinimas (21 d.)
   if (parts.PAKARTOTINIS) {
-    result['PAKARTOTINIS'] = { startDate: fmt(cursor), endDate: fmt(addDays(cursor, 21)) };
-    cursor = addDays(cursor, 21);
+    result['PAKARTOTINIS'] = { startDate: fmt(cursor), endDate: fmt(addDays(cursor, 28)) };
+    cursor = addDays(cursor, 28);
   }
 
   // Ekspertizė (28 d., tik jei pasirinkta)
   if (parts.EKSPERTIZE) {
     result['EKSPERTIZE'] = { startDate: fmt(cursor), endDate: fmt(addDays(cursor, 28)) };
+  }
+
+  return result;
+}
+
+/**
+ * Apskaičiuoja papildomų (rankiniu būdu pridėtų) dalių planuojamas datas.
+ * Lygiagrečios — TDP bloke, prasideda po SP/SA. Nuoseklios — sukrautos viena
+ * po kitos prie standartinės grandinės pabaigos.
+ */
+export function calcCustomPartDates(
+  startDate: string,
+  parts: SelectedParts,
+  customParts: CustomPart[] = [],
+): Record<string, { startDate: string; endDate: string }> {
+  if (!startDate || !customParts.length) return {};
+
+  const addDays = (date: Date, days: number) => {
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    return d;
+  };
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+  const stageDates = calcStageDates(startDate, parts, customParts);
+  const result: Record<string, { startDate: string; endDate: string }> = {};
+
+  // Standartinės grandinės pabaiga (vėliausia etapo pabaiga)
+  let chainEnd = new Date(startDate);
+  for (const v of Object.values(stageDates)) {
+    if (!v) continue;
+    const e = new Date(v.endDate);
+    if (e > chainEnd) chainEnd = e;
+  }
+
+  // Lygiagrečios dalys: po SP/SA TDP bloke (arba nuo lygiagretaus bloko pradžios, jei nėra TDP)
+  const tdp = stageDates['TDP'] ?? stageDates['SLD'];
+  const parallelStartBase = tdp
+    ? addDays(new Date(tdp.startDate), parts.TDP ? tdpSpSaPrefixDays(parts) : 0)
+    : chainEnd;
+
+  // Nuoseklios dalys: krauname prie grandinės pabaigos
+  let seqCursor = new Date(chainEnd);
+
+  for (const c of customParts) {
+    const days = (c.weeks || 0) * 7;
+    if (c.parallel) {
+      result[c.id] = { startDate: fmt(parallelStartBase), endDate: fmt(addDays(parallelStartBase, days)) };
+    } else {
+      result[c.id] = { startDate: fmt(seqCursor), endDate: fmt(addDays(seqCursor, days)) };
+      seqCursor = addDays(seqCursor, days);
+    }
   }
 
   return result;
@@ -247,6 +352,7 @@ export function calcEffectiveStageDates(
   startDate: string,
   parts: SelectedParts,
   stageStatuses: Partial<Record<import('./types').StageId, import('./types').StageStatus>>,
+  customParts: CustomPart[] = [],
 ): Partial<Record<import('./types').StageId, { startDate: string; endDate: string; isShifted?: boolean }>> {
   if (!startDate) return {};
 
@@ -264,9 +370,16 @@ export function calcEffectiveStageDates(
   };
 
   const result: Partial<Record<import('./types').StageId, { startDate: string; endDate: string; isShifted?: boolean }>> = {};
-  const planned = calcStageDates(startDate, parts);
+  const planned = calcStageDates(startDate, parts, customParts);
 
   let cursor = new Date(startDate);
+
+  // DP (lygiagrečiai su SR+PP)
+  if (parts.DP) {
+    const dpPlannedEnd = addDays(new Date(startDate), parts.DP_days || 84);
+    const dpEffEnd = effectiveEnd('DP', dpPlannedEnd);
+    result['DP'] = { startDate: fmt(new Date(startDate)), endDate: fmt(dpEffEnd) };
+  }
 
   // SR
   const srPlannedEnd = addDays(cursor, 35);
@@ -304,6 +417,12 @@ export function calcEffectiveStageDates(
     cursor = ipEffEnd;
   }
 
+  // DP gali pastumti SLD/TDP pradžią (jei nėra faktinės DP pabaigos)
+  if (parts.DP && !stageStatuses['DP']?.endDate) {
+    const dpEnd = addDays(new Date(startDate), parts.DP_days || 84);
+    if (dpEnd > cursor) cursor = dpEnd;
+  }
+
   // SLD + TDP lygiagrečiai
   const parallelStart = new Date(cursor);
   const sldDays = parts.SLD ? 42 : 0;
@@ -333,10 +452,16 @@ export function calcEffectiveStageDates(
 
   cursor = sldEffEnd > tdpEffEnd ? sldEffEnd : tdpEffEnd;
 
+  // Lygiagrečios papildomos dalys gali pratęsti TDP bloką (jei nėra faktinės TDP pabaigos)
+  if (!stageStatuses['TDP']?.endDate) {
+    const blockPlannedEnd = addDays(parallelStart, Math.max(sldDays, tdpBlockDays(parts, customParts)));
+    if (blockPlannedEnd > cursor) cursor = blockPlannedEnd;
+  }
+
   // Pakartotinis
   if (parts.PAKARTOTINIS) {
     const pakStart = new Date(cursor);
-    const pakPlannedEnd = addDays(cursor, 21);
+    const pakPlannedEnd = addDays(cursor, 28);
     const pakEffEnd = effectiveEnd('PAKARTOTINIS', pakPlannedEnd);
     const pakIsShifted = planned['PAKARTOTINIS'] ? fmt(pakStart) !== planned['PAKARTOTINIS'].startDate : false;
     result['PAKARTOTINIS'] = { startDate: fmt(pakStart), endDate: fmt(pakEffEnd), isShifted: pakIsShifted };
@@ -364,6 +489,18 @@ export function formatDate(iso: string): string {
 // ---------------------------------------------------------------------------
 
 export const STAGES: StageInfo[] = [
+  {
+    id: 'DP',
+    name: 'Detalusis planas',
+    shortName: 'DP',
+    durationLabel: '~2–3 mėn.',
+    colorClass: 'border-rose-500',
+    bgClass: 'bg-rose-100',
+    textClass: 'text-rose-700',
+    tasks: [
+      { label: 'Rengiamas lygiagrečiai su SR ir PP', duration: '~2–3 mėn.' },
+    ],
+  },
   {
     id: 'SR',
     name: 'Paruošiamasis etapas + SR',
@@ -441,7 +578,7 @@ export const STAGES: StageInfo[] = [
     id: 'PAKARTOTINIS',
     name: 'Pakartotinis derinimas',
     shortName: 'Pakartotinis',
-    durationLabel: '~3 sav.',
+    durationLabel: '~4 sav.',
     colorClass: 'border-teal-400',
     bgClass: 'bg-teal-50',
     textClass: 'text-teal-700',

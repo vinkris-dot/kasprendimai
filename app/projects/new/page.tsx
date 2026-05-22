@@ -89,6 +89,11 @@ export default function NewProject() {
     setParts(p => ({ ...p, KITA_days: n * 7 }));
   }
 
+  function handleDpDays(val: string) {
+    const n = parseInt(val) || 12;
+    setParts(p => ({ ...p, DP_days: n * 7 }));
+  }
+
   function setPuField<K extends keyof ProjektavimoUzduotis>(key: K, val: ProjektavimoUzduotis[K]) {
     setPu(p => ({ ...p, [key]: val }));
   }
@@ -238,7 +243,7 @@ export default function NewProject() {
                           />
                           {part.label}
                           <span className={`text-xs font-normal ${checked ? 'text-slate-300' : 'text-slate-400'}`}>
-                            {part.id === 'KITA' ? `${Math.round(parts.KITA_days / 7)} sav.` : `${part.durationDays / 7} sav.`}
+                            {part.id === 'KITA' ? `${Math.round(parts.KITA_days / 7)} sav.` : part.id === 'DP' ? `${Math.round((parts.DP_days || 84) / 7)} sav.` : `${part.durationDays / 7} sav.`}
                           </span>
                         </label>
                         {part.id === 'KITA' && parts.KITA && (
@@ -253,6 +258,20 @@ export default function NewProject() {
                               placeholder="sav."
                             />
                             <span className="text-xs text-slate-400 ml-1">sav.</span>
+                          </div>
+                        )}
+                        {part.id === 'DP' && parts.DP && (
+                          <div className="mt-1.5">
+                            <input
+                              type="number"
+                              min={1}
+                              max={26}
+                              value={Math.round((parts.DP_days || 84) / 7)}
+                              onChange={e => handleDpDays(e.target.value)}
+                              className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-slate-900"
+                              placeholder="sav."
+                            />
+                            <span className="text-xs text-slate-400 ml-1">sav. (su SR+PP)</span>
                           </div>
                         )}
                       </div>

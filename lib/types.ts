@@ -1,6 +1,6 @@
-export type StageId = 'SR' | 'PP' | 'PP_VIESIMAS' | 'IP' | 'SLD' | 'PAKARTOTINIS' | 'TDP' | 'EKSPERTIZE';
+export type StageId = 'DP' | 'SR' | 'PP' | 'PP_VIESIMAS' | 'IP' | 'SLD' | 'PAKARTOTINIS' | 'TDP' | 'EKSPERTIZE';
 
-export type PartId = 'PP' | 'VIESIMAS' | 'IP' | 'SLD' | 'TDP' | 'BD' | 'SP' | 'SA' | 'SK' | 'LVN' | 'PAKARTOTINIS' | 'EKSPERTIZE' | 'KITA';
+export type PartId = 'DP' | 'PP' | 'VIESIMAS' | 'IP' | 'SLD' | 'TDP' | 'BD' | 'SP' | 'SA' | 'SK' | 'LVN' | 'PAKARTOTINIS' | 'EKSPERTIZE' | 'KITA';
 
 export type TeamMemberId = 'NR' | 'KV' | 'LL' | 'EXT';
 
@@ -21,6 +21,8 @@ export interface PartConfig {
 }
 
 export interface SelectedParts {
+  DP: boolean;
+  DP_days: number; // DP trukmė (kalendorinės dienos); vyksta lygiagrečiai su SR+PP
   PP: boolean;
   VIESIMAS: boolean;
   IP: boolean;
@@ -157,6 +159,21 @@ export const DEFAULT_PU: ProjektavimoUzduotis = {
   stogasTipas: '', fasadai: [], fasadaiKita: '',
 };
 
+export interface BylaSection {
+  done: boolean;
+  files: UploadedFile[];
+}
+
+export interface CustomPart {
+  id: string;
+  name: string;
+  weeks: number;
+  parallel: boolean; // true → vyksta TDP bloke po SP/SA; false → nuosekli, prie grandinės pabaigos
+  startDate?: string; // faktinė pradžia
+  endDate?: string;   // faktinė pabaiga
+  notes?: string;
+}
+
 export interface ManualTask {
   id: string;
   label: string;
@@ -187,10 +204,14 @@ export interface Project {
   taskStatuses?: Record<string, { dueDate?: string; doneAt?: string }>;
   manualTasks?: ManualTask[];
   pu?: ProjektavimoUzduotis;
+  customParts?: CustomPart[];
   archived?: boolean;
   paused?: boolean;
   pauseReason?: string;
   pauseUntil?: string; // YYYY-MM-DD control date
+  kitiDokumentai?: DocumentItem[];
+  bylos?: Record<string, BylaSection>; // keyed by part id: 'PP' | 'SLD' | 'TDP' etc.
+  pakartotinisRounds?: number; // how many times PAKARTOTINIS was completed
   createdAt: string;
   updatedAt: string;
 }

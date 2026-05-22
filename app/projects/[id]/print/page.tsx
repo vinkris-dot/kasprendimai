@@ -45,7 +45,7 @@ export default function PrintPage({ params }: { params: Promise<{ id: string }> 
   const activeStages = STAGES.filter(s => activeStageIds.includes(s.id));
   const currentStages = project.activeStages ?? ['SR'];
   const completedStages = project.completedStages ?? [];
-  const plannedDates = calcStageDates(project.startDate, selectedParts);
+  const plannedDates = calcStageDates(project.startDate, selectedParts, project.customParts ?? []);
 
   const ppCategories = Array.from(new Set(project.ppByla.map(i => i.category)));
   const docsDone = project.dokumentai.filter(d => d.received).length;
