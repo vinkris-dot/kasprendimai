@@ -1418,7 +1418,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
                       <input type="file" className="hidden" multiple onChange={e => {
                         Array.from(e.target.files ?? []).forEach(f => {
-                          uploadFile(f, `BYLOS/${sec.id}`, f.name, uf => addBylaFile(project.id, sec.id, uf), () => alert('Klaida įkeliant failą'));
+                          uploadFile(f, `BYLOS/${sec.id}`, f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, sec.id, uf), () => alert('Klaida įkeliant failą'));
                         });
                         e.target.value = '';
                       }} />
@@ -1450,7 +1450,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
                       <input type="file" className="hidden" multiple onChange={e => {
                         Array.from(e.target.files ?? []).forEach(f => {
-                          uploadFile(f, 'BYLOS/KITI', f.name, uf => addBylaFile(project.id, 'KITI', uf), () => alert('Klaida įkeliant failą'));
+                          uploadFile(f, 'BYLOS/KITI', f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, 'KITI', uf), () => alert('Klaida įkeliant failą'));
                         });
                         e.target.value = '';
                       }} />
