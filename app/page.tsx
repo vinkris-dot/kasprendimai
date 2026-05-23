@@ -307,6 +307,16 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Nuslinkti prie sekcijos (Archyvas / Pristabdyti) atėjus su hash iš viršutinės juostos
+  useEffect(() => {
+    if (!loaded) return;
+    const hash = window.location.hash?.slice(1);
+    if (!hash) return;
+    if (hash === 'sec-archived') setShowArchived(true);
+    if (hash === 'sec-finished') setShowFinished(true);
+    setTimeout(() => document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+  }, [loaded]);
+
   async function handleNotifClick() {
     if (!('Notification' in window)) return;
     if (Notification.permission === 'denied') return;

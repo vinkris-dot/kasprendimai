@@ -16,12 +16,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="font-semibold text-slate-800 tracking-tight text-lg">
               KA sprendimai
             </Link>
-            <Link
-              href="/projects/new"
-              className="bg-slate-900 text-white text-sm px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors"
-            >
-              + Naujas projektas
-            </Link>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Link href="/#sec-paused" className="text-sm text-slate-500 hover:text-slate-900 transition-colors hidden sm:inline">
+                ⏸ Pristabdyti
+              </Link>
+              <Link href="/#sec-archived" className="text-sm text-slate-500 hover:text-slate-900 transition-colors hidden sm:inline">
+                📦 Archyvas
+              </Link>
+              <Link
+                href="/projects/new"
+                className="bg-slate-900 text-white text-sm px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors"
+              >
+                + Naujas projektas
+              </Link>
+            </div>
           </div>
         </header>
         <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
