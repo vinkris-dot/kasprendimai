@@ -417,6 +417,30 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Quick links to other project groups */}
+          {(pausedProjects.length > 0 || finishedProjects.length > 0 || archivedProjects.length > 0) && (
+            <div className="flex flex-wrap gap-2 mb-5">
+              {pausedProjects.length > 0 && (
+                <button
+                  onClick={() => document.getElementById('sec-paused')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                >⏸ Pristabdyti ({pausedProjects.length})</button>
+              )}
+              {finishedProjects.length > 0 && (
+                <button
+                  onClick={() => { setShowFinished(true); setTimeout(() => document.getElementById('sec-finished')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }}
+                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors"
+                >✓ Baigti ({finishedProjects.length})</button>
+              )}
+              {archivedProjects.length > 0 && (
+                <button
+                  onClick={() => { setShowArchived(true); setTimeout(() => document.getElementById('sec-archived')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }}
+                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
+                >📦 Archyvas ({archivedProjects.length})</button>
+              )}
+            </div>
+          )}
+
           {/* Search */}
           <div className="mb-3">
             <input
@@ -847,7 +871,7 @@ export default function Dashboard() {
 
           {/* Paused projects */}
           {pausedProjects.length > 0 && (
-            <div className="mt-8">
+            <div className="mt-8 scroll-mt-4" id="sec-paused">
               <div className="flex items-center gap-2 text-sm font-semibold text-amber-600 uppercase tracking-wider mb-4">
                 <span>⏸</span> Pristabdyti ({pausedProjects.length})
               </div>
@@ -881,7 +905,7 @@ export default function Dashboard() {
 
           {/* Finished projects */}
           {finishedProjects.length > 0 && (
-            <div className="mt-8">
+            <div className="mt-8 scroll-mt-4" id="sec-finished">
               <button
                 onClick={() => setShowFinished(v => !v)}
                 className="flex items-center gap-2 text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 hover:text-slate-700 transition-colors"
@@ -947,7 +971,7 @@ export default function Dashboard() {
           />
 
           {archivedProjects.length > 0 && (
-            <div className="mt-8">
+            <div className="mt-8 scroll-mt-4" id="sec-archived">
               <button
                 onClick={() => setShowArchived(v => !v)}
                 className="flex items-center gap-2 text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 hover:text-slate-600 transition-colors"
