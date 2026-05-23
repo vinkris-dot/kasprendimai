@@ -419,7 +419,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       onClick={() => { updateProject(project!.id, { archived: !project!.archived }); setEditing(false); }}
                       title={!project!.archived && !isBylosComplete ? `Bylose trūksta ${allRequiredSections.length - bylaDone} dok.` : undefined}
                       className={`text-xs transition-colors ${!project!.archived && !isBylosComplete ? 'text-amber-500 hover:text-amber-700' : 'text-slate-400 hover:text-slate-700'}`}
-                    >{project!.archived ? '↩ Atarchyvuoti' : `📦 Archyvuoti${!isBylosComplete ? ` ⚠ (${bylaDone}/${allRequiredSections.length})` : ''}`}</button>
+                    >{project!.archived ? '↩ Perkelti į aktyvius' : `📦 Archyvuoti${!isBylosComplete ? ` ⚠ (${bylaDone}/${allRequiredSections.length})` : ''}`}</button>
                     <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">Ištrinti projektą</button>
                   </div>
                 </div>
