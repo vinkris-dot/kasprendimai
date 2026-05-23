@@ -291,7 +291,7 @@ export default function Dashboard() {
   });
   const [showFinished, setShowFinished] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  const [showArchived, setShowArchived] = useState(true);
   const [taskSidebarOpen, setTaskSidebarOpen] = useState(false);
   const [expandedDocsId, setExpandedDocsId] = useState<string | null>(null);
   const [expandedTasksId, setExpandedTasksId] = useState<string | null>(null);
