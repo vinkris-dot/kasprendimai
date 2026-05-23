@@ -445,8 +445,8 @@ export default function Dashboard() {
               {archivedProjects.length > 0 && (
                 <button
                   onClick={() => { setShowArchived(true); setTimeout(() => document.getElementById('sec-archived')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }}
-                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
-                >📦 Archyvas ({archivedProjects.length})</button>
+                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors inline-flex items-center gap-1.5"
+                ><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archyvas ({archivedProjects.length})</button>
               )}
             </div>
           )}
@@ -987,7 +987,8 @@ export default function Dashboard() {
                 className="flex items-center gap-2 text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 hover:text-slate-600 transition-colors"
               >
                 <span className={`transition-transform ${showArchived ? 'rotate-90' : ''}`}>›</span>
-                📦 Archyvas ({archivedProjects.length})
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                Archyvas ({archivedProjects.length})
               </button>
               {showArchived && (
                 <div className="grid gap-3">
@@ -1001,7 +1002,7 @@ export default function Dashboard() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h2 className="font-semibold text-slate-600 truncate text-sm">{project.name}</h2>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0">📦 Archyvas</span>
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0 inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archyvas</span>
                           </div>
                           <p className="text-xs text-slate-400 mt-0.5">{project.client} · {project.address}</p>
                         </div>

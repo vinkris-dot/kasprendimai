@@ -20,8 +20,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/#sec-paused" className="text-sm text-slate-500 hover:text-slate-900 transition-colors hidden sm:inline">
                 ⏸ Pristabdyti
               </Link>
-              <Link href="/#sec-archived" className="text-sm text-slate-500 hover:text-slate-900 transition-colors hidden sm:inline">
-                📦 Archyvas
+              <Link href="/#sec-archived" className="text-sm text-slate-500 hover:text-slate-900 transition-colors hidden sm:flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                Archyvas
               </Link>
               <Link
                 href="/projects/new"

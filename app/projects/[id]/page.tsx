@@ -418,8 +418,13 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <button
                       onClick={() => { updateProject(project!.id, { archived: !project!.archived }); setEditing(false); }}
                       title={!project!.archived && !isBylosComplete ? `Bylose trūksta ${allRequiredSections.length - bylaDone} dok.` : undefined}
-                      className={`text-xs transition-colors ${!project!.archived && !isBylosComplete ? 'text-amber-500 hover:text-amber-700' : 'text-slate-400 hover:text-slate-700'}`}
-                    >{project!.archived ? '↩ Perkelti į aktyvius' : `📦 Archyvuoti${!isBylosComplete ? ` ⚠ (${bylaDone}/${allRequiredSections.length})` : ''}`}</button>
+                      className={`text-xs transition-colors inline-flex items-center gap-1.5 ${!project!.archived && !isBylosComplete ? 'text-amber-500 hover:text-amber-700' : 'text-slate-400 hover:text-slate-700'}`}
+                    >{project!.archived ? '↩ Perkelti į aktyvius' : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                        Archyvuoti{!isBylosComplete ? ` ⚠ (${bylaDone}/${allRequiredSections.length})` : ''}
+                      </>
+                    )}</button>
                     <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">Ištrinti projektą</button>
                   </div>
                 </div>
