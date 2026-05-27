@@ -68,7 +68,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [notesValue, setNotesValue] = useState('');
   const [notesSaved, setNotesSaved] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', address: '', client: '', clientEmail: '', startDate: '' });
+  const [editForm, setEditForm] = useState({ projectNumber: '', name: '', address: '', client: '', clientEmail: '', startDate: '' });
   const [editParts, setEditParts] = useState<SelectedParts | null>(null);
   const [editCustomParts, setEditCustomParts] = useState<CustomPart[]>([]);
   const [newCustomPart, setNewCustomPart] = useState({ name: '', weeks: 2, parallel: false });
@@ -162,7 +162,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   }
 
   function handleEditOpen() {
-    setEditForm({ name: project!.name, address: project!.address, client: project!.client, clientEmail: project!.clientEmail ?? '', startDate: project!.startDate });
+    setEditForm({ projectNumber: project!.projectNumber ?? '', name: project!.name, address: project!.address, client: project!.client, clientEmail: project!.clientEmail ?? '', startDate: project!.startDate });
     setEditParts({ ...project!.selectedParts });
     setEditCustomParts((project!.customParts ?? []).map(c => ({ ...c })));
     setNewCustomPart({ name: '', weeks: 2, parallel: false });
@@ -281,6 +281,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <div>
             {editing && editParts ? (
               <div className="space-y-3 w-full">
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Projekto Nr.</label>
+                  <input
+                    value={editForm.projectNumber}
+                    onChange={e => setEditForm(f => ({ ...f, projectNumber: e.target.value }))}
+                    placeholder="pvz. KAS 2605/01"
+                    className="w-full text-sm font-mono border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
                 <input
                   value={editForm.name}
                   onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
