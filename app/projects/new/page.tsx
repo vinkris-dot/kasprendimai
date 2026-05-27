@@ -154,22 +154,22 @@ export default function NewProject() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Projekto pavadinimas *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Adresas *</label>
             <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="pvz. Gyvenamasis namas Kaune"
+              value={address}
+              onChange={e => setAddress(e.target.value)}
+              placeholder="pvz. Gedimino pr. 1, Vilnius"
               required
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Adresas *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Projekto pavadinimas *</label>
             <input
-              value={address}
-              onChange={e => setAddress(e.target.value)}
-              placeholder="pvz. Gedimino pr. 1, Vilnius"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="pvz. Gyvenamasis namas Kaune"
               required
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
             />

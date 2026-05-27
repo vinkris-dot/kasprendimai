@@ -291,14 +291,16 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   />
                 </div>
                 <input
-                  value={editForm.name}
-                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full text-lg font-semibold border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                />
-                <input
                   value={editForm.address}
                   onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))}
+                  placeholder="Adresas"
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+                <input
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Projekto pavadinimas"
+                  className="w-full text-lg font-semibold border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
                 <input
                   value={editForm.client}
