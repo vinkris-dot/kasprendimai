@@ -205,6 +205,8 @@ export interface Project {
   manualTasks?: ManualTask[];
   pu?: ProjektavimoUzduotis;
   customParts?: CustomPart[];
+  deadline?: string; // YYYY-MM-DD — su užsakovu sutartas terminas (skiriasi nuo skaičiuojamos statybos pradžios)
+  priority?: boolean; // pirmumas — užsakovas moka extra, kad būtų pirmoje vietoje
   archived?: boolean;
   paused?: boolean;
   pauseReason?: string;

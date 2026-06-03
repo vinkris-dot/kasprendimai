@@ -74,6 +74,8 @@ export default function NewProject() {
   const [client, setClient] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [deadline, setDeadline] = useState('');
+  const [isPriority, setIsPriority] = useState(false);
   const [parts, setParts] = useState<SelectedParts>({ ...DEFAULT_PARTS });
   const [showPU, setShowPU] = useState(false);
   const [pu, setPu] = useState<ProjektavimoUzduotis>({ ...DEFAULT_PU });
@@ -112,7 +114,7 @@ export default function NewProject() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !address || !client || !startDate) return;
-    const project = addProject({ name, address, client, clientEmail, startDate, selectedParts: parts, pu: showPU ? pu : undefined, projectNumber: projectNumber.trim() || suggested });
+    const project = addProject({ name, address, client, clientEmail, startDate, selectedParts: parts, pu: showPU ? pu : undefined, projectNumber: projectNumber.trim() || suggested, deadline: deadline || undefined, priority: isPriority });
     router.push(`/projects/${project.id}`);
   }
 
@@ -197,16 +199,37 @@ export default function NewProject() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Projekto pradžia *</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-              required
-              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Projekto pradžia *</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                required
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Sutartas terminas</label>
+              <input
+                type="date"
+                value={deadline}
+                onChange={e => setDeadline(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isPriority}
+              onChange={e => setIsPriority(e.target.checked)}
+              className="accent-amber-500 w-4 h-4"
+            />
+            <span className="text-sm text-slate-700">⭐ Pirmumas (užsakovas moka extra — kelti į viršų)</span>
+          </label>
         </div>
 
         {/* Parts selection */}

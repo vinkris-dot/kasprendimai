@@ -346,6 +346,8 @@ export default function Dashboard() {
 
   function sortProjects(list: Project[]) {
     return [...list].sort((a, b) => {
+      // Pirmumo projektai visada viršuje
+      if (!!a.priority !== !!b.priority) return a.priority ? -1 : 1;
       if (sortBy === 'name') return a.name.localeCompare(b.name, 'lt');
       if (sortBy === 'stage') {
         const stageOrder = (p: Project) => Math.min(...(p.activeStages ?? ['SR']).map(s => STAGES.findIndex(st => st.id === s)));
@@ -642,7 +644,10 @@ export default function Dashboard() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         {project.projectNumber && <span className="text-[10px] font-mono text-slate-400 font-medium">{project.projectNumber}</span>}
-                        <h2 className="font-semibold text-slate-900 truncate">{project.name}</h2>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {project.priority && <span className="text-xs shrink-0" title="Pirmumas">⭐</span>}
+                          <h2 className="font-semibold text-slate-900 truncate">{project.name}</h2>
+                        </div>
                         {project.address && project.address !== project.name && (
                           <p className="text-sm text-slate-500 mt-0.5 truncate">{project.address}</p>
                         )}
@@ -705,6 +710,16 @@ export default function Dashboard() {
                           <span className={isOverdue ? 'text-red-400' : ''}>{formatDate(project.targetConstructionDate)}</span>
                         </div>
                       </div>
+                      {project.deadline && (() => {
+                        const today = new Date().toISOString().slice(0, 10);
+                        const dlOverdue = project.deadline < today;
+                        return (
+                          <div className={`mt-1 text-xs flex items-center gap-1 ${dlOverdue ? 'text-red-500' : 'text-slate-400'}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            Sutarta iki: <strong>{formatDate(project.deadline)}</strong>{dlOverdue ? ' (vėluoja!)' : ''}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Checklist progress + health */}

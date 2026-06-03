@@ -179,6 +179,8 @@ export function useProjects() {
     selectedParts: SelectedParts;
     pu?: ProjektavimoUzduotis;
     projectNumber?: string;
+    deadline?: string;
+    priority?: boolean;
   }): Project => {
     const now = new Date().toISOString();
     const targetConstructionDate = calcTargetDate(data.startDate, data.selectedParts);

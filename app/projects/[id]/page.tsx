@@ -68,7 +68,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [notesValue, setNotesValue] = useState('');
   const [notesSaved, setNotesSaved] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ projectNumber: '', name: '', address: '', client: '', clientEmail: '', startDate: '' });
+  const [editForm, setEditForm] = useState({ projectNumber: '', name: '', address: '', client: '', clientEmail: '', startDate: '', deadline: '', priority: false });
   const [editParts, setEditParts] = useState<SelectedParts | null>(null);
   const [editCustomParts, setEditCustomParts] = useState<CustomPart[]>([]);
   const [newCustomPart, setNewCustomPart] = useState({ name: '', weeks: 2, parallel: false });
@@ -162,7 +162,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   }
 
   function handleEditOpen() {
-    setEditForm({ projectNumber: project!.projectNumber ?? '', name: project!.name, address: project!.address, client: project!.client, clientEmail: project!.clientEmail ?? '', startDate: project!.startDate });
+    setEditForm({ projectNumber: project!.projectNumber ?? '', name: project!.name, address: project!.address, client: project!.client, clientEmail: project!.clientEmail ?? '', startDate: project!.startDate, deadline: project!.deadline ?? '', priority: project!.priority ?? false });
     setEditParts({ ...project!.selectedParts });
     setEditCustomParts((project!.customParts ?? []).map(c => ({ ...c })));
     setNewCustomPart({ name: '', weeks: 2, parallel: false });
@@ -315,15 +315,36 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   placeholder="Užsakovo el. paštas"
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Projekto pradžia</label>
-                  <input
-                    type="date"
-                    value={editForm.startDate}
-                    onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))}
-                    className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  />
+                <div className="flex gap-4 flex-wrap">
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">Projekto pradžia</label>
+                    <input
+                      type="date"
+                      value={editForm.startDate}
+                      onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))}
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">Sutartas terminas</label>
+                    <input
+                      type="date"
+                      value={editForm.deadline}
+                      onChange={e => setEditForm(f => ({ ...f, deadline: e.target.value }))}
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    />
+                  </div>
                 </div>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editForm.priority}
+                    onChange={e => setEditForm(f => ({ ...f, priority: e.target.checked }))}
+                    className="accent-amber-500 w-4 h-4"
+                  />
+                  <span className="text-sm text-slate-700">⭐ Pirmumas (užsakovas moka extra — kelti į viršų)</span>
+                </label>
 
                 {/* Parts selection */}
                 <div className="border border-slate-200 rounded-xl p-3 bg-slate-50">
@@ -446,6 +467,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   <p className="text-xs font-mono font-semibold text-slate-400 mb-1 tracking-wide">{project.projectNumber}</p>
                 )}
                 <div className="flex items-center gap-2 flex-wrap">
+                  {project.priority && (
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">⭐ Pirmumas</span>
+                  )}
                   <h1 className="text-2xl font-semibold text-slate-900">{project.name}</h1>
                   {currentStages.length === 0 && (
                     <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700">Baigtas</span>
@@ -469,6 +493,16 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 <p className="text-xs text-amber-600 mt-0.5">Numatoma: <strong>{formatDate(effectiveTargetDate)}</strong></p>
               )}
             </div>
+            {project.deadline && (() => {
+              const today = new Date().toISOString().slice(0, 10);
+              const overdue = project.deadline < today && currentStages.length > 0;
+              return (
+                <div className={`border rounded-xl px-4 py-2.5 mb-2 ${overdue ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
+                  <p className={`text-xs ${overdue ? 'text-red-500' : 'text-slate-400'}`}>Sutartas terminas{overdue ? ' — vėluoja!' : ''}</p>
+                  <p className={`text-base font-bold ${overdue ? 'text-red-700' : 'text-slate-900'}`}>{formatDate(project.deadline)}</p>
+                </div>
+              );
+            })()}
             <button
               onClick={handleCreateFolder}
               disabled={folderStatus === 'creating'}
