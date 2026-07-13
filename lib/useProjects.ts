@@ -136,17 +136,31 @@ export function useProjects() {
       setProjects(local);
     }
 
-    // 2. Fetch from Supabase and merge (Supabase is source of truth)
+    // 2. Fetch from Supabase and MERGE per-project by updatedAt (naujesnis laimi).
+    // Svarbu: debesis gali turėti senesnius duomenis (pvz. po projekto pauzės) —
+    // aklai imti remote kaip tiesos šaltinį reikštų šviežių lokalių duomenų praradimą.
     fetchFromSupabase().then(({ ok, projects: remote }) => {
       setSyncStatus(ok ? 'synced' : 'local-only');
-      if (remote.length > 0) {
-        // Migrate remote projects and use them as source of truth
-        const migrated = remote.map(migrateProject);
-        setProjects(migrated);
-        saveToLocalStorage(migrated);
-      } else if (ok && local.length > 0) {
-        // No remote data yet — push local data to Supabase (first-time migration)
-        local.forEach(p => upsertToSupabase(p));
+      if (ok) {
+        const localById = new Map(local.map(p => [p.id, p]));
+        const remoteById = new Map(remote.map(p => [p.id, p]));
+        const merged: Project[] = [];
+        for (const r of remote) {
+          const l = localById.get(r.id);
+          merged.push(migrateProject(l && (l.updatedAt ?? '') > (r.updatedAt ?? '') ? l : r));
+        }
+        for (const l of local) {
+          if (!remoteById.has(l.id)) merged.push(migrateProject(l));
+        }
+        if (merged.length > 0) {
+          setProjects(merged);
+          saveToLocalStorage(merged);
+          // Sukeliam į debesį tai, ko ten nėra arba kas lokaliai naujesnis
+          merged.forEach(m => {
+            const r = remoteById.get(m.id);
+            if (!r || (m.updatedAt ?? '') > (r.updatedAt ?? '')) upsertToSupabase(m);
+          });
+        }
       }
       setLoaded(true);
     });
