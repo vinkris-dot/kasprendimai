@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Project, StageId, SelectedParts, MotyvuotasAtsakymas, ProjektavimoUzduotis } from './types';
-import { createDefaultProject, calcTargetDate, DEFAULT_DOKUMENTAI, DEFAULT_PP_BYLA, DEFAULT_STAGE_ASSIGNEES } from './defaultData';
+import { createDefaultProject, calcTargetDate, validStageIds, DEFAULT_DOKUMENTAI, DEFAULT_PP_BYLA, DEFAULT_STAGE_ASSIGNEES } from './defaultData';
 import { supabase } from './supabase';
 
 const STORAGE_KEY = 'openclaw_projects';
@@ -42,19 +42,6 @@ async function fetchFromSupabase(): Promise<{ ok: boolean; projects: Project[] }
   } catch {
     return { ok: false, projects: [] };
   }
-}
-
-function validStageIds(sp: SelectedParts): StageId[] {
-  const ids: StageId[] = ['SR'];
-  if (sp.DP) ids.push('DP');
-  if (sp.PP) ids.push('PP');
-  if (sp.VIESIMAS) ids.push('PP_VIESIMAS');
-  if (sp.IP) ids.push('IP');
-  if (sp.SLD) ids.push('SLD');
-  if (sp.PAKARTOTINIS) ids.push('PAKARTOTINIS');
-  if (sp.TDP) ids.push('TDP');
-  if (sp.EKSPERTIZE) ids.push('EKSPERTIZE');
-  return ids;
 }
 
 function migrateProject(p: Project): Project {
