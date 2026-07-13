@@ -228,7 +228,7 @@ export default function NewProject() {
               onChange={e => setIsPriority(e.target.checked)}
               className="accent-amber-500 w-4 h-4"
             />
-            <span className="text-sm text-slate-700">⭐ Pirmumas (užsakovas moka extra — kelti į viršų)</span>
+            <span className="text-sm text-slate-700">Pirmumas (užsakovas moka extra — kelti į viršų)</span>
           </label>
         </div>
 

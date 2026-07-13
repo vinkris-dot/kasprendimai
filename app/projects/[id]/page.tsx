@@ -343,7 +343,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     onChange={e => setEditForm(f => ({ ...f, priority: e.target.checked }))}
                     className="accent-amber-500 w-4 h-4"
                   />
-                  <span className="text-sm text-slate-700">⭐ Pirmumas (užsakovas moka extra — kelti į viršų)</span>
+                  <span className="text-sm text-slate-700">Pirmumas (užsakovas moka extra — kelti į viršų)</span>
                 </label>
 
                 {/* Parts selection */}
@@ -468,7 +468,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 )}
                 <div className="flex items-center gap-2 flex-wrap">
                   {project.priority && (
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">⭐ Pirmumas</span>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 inline-flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                      Pirmumas
+                    </span>
                   )}
                   <h1 className="text-2xl font-semibold text-slate-900">{project.name}</h1>
                   {currentStages.length === 0 && (
@@ -515,7 +518,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               {folderStatus === 'creating' ? '⏳ Kuriama...' :
                folderStatus === 'done' ? '✓ Aplankas sukurtas' :
                folderStatus === 'error' ? '↺ Bandyti vėl' :
-               '📁 Sukurti aplanką'}
+               'Sukurti aplanką'}
             </button>
           </div>
         </div>

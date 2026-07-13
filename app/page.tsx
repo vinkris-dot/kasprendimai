@@ -297,6 +297,7 @@ export default function Dashboard() {
   const [expandedDocsId, setExpandedDocsId] = useState<string | null>(null);
   const [expandedTasksId, setExpandedTasksId] = useState<string | null>(null);
   const [copyConfirmId, setCopyConfirmId] = useState<string | null>(null);
+  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null);
   const [pauseModal, setPauseModal] = useState<{ projectId: string; reason: string; until: string } | null>(null);
 
@@ -648,7 +649,7 @@ export default function Dashboard() {
                       <div className="min-w-0">
                         {project.projectNumber && <span className="text-[10px] font-mono text-slate-400 font-medium">{project.projectNumber}</span>}
                         <div className="flex items-center gap-1.5 min-w-0">
-                          {project.priority && <span className="text-xs shrink-0" title="Pirmumas">⭐</span>}
+                          {project.priority && <svg className="w-3.5 h-3.5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
                           <h2 className="font-semibold text-slate-900 truncate">{project.name}</h2>
                         </div>
                         {project.address && project.address !== project.name && (
@@ -770,24 +771,44 @@ export default function Dashboard() {
                       </svg>
                       {project.paused ? 'Pristabdyta' : 'Pristabdyti'}
                     </button>
-                    {copyConfirmId === project.id ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500">Kopijuoti?</span>
-                        <button onClick={e => { e.preventDefault(); const copy = copyProject(project); setCopyConfirmId(null); router.push(`/projects/${copy.id}`); }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
-                        <button onClick={e => { e.preventDefault(); setCopyConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={e => { e.preventDefault(); setCopyConfirmId(project.id); }}
-                        className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors"
-                        title="Kopijuoti projektą"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
-                        Kopijuoti
-                      </button>
-                    )}
+                    <div className="flex items-center gap-4">
+                      {archiveConfirmId === project.id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">Archyvuoti?</span>
+                          <button onClick={e => { e.preventDefault(); updateProject(project.id, { archived: true }); setArchiveConfirmId(null); }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
+                          <button onClick={e => { e.preventDefault(); setArchiveConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={e => { e.preventDefault(); setArchiveConfirmId(project.id); }}
+                          className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors"
+                          title="Perkelti į archyvą"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+                          </svg>
+                          Archyvuoti
+                        </button>
+                      )}
+                      {copyConfirmId === project.id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">Kopijuoti?</span>
+                          <button onClick={e => { e.preventDefault(); const copy = copyProject(project); setCopyConfirmId(null); router.push(`/projects/${copy.id}`); }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
+                          <button onClick={e => { e.preventDefault(); setCopyConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={e => { e.preventDefault(); setCopyConfirmId(project.id); }}
+                          className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors"
+                          title="Kopijuoti projektą"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                          </svg>
+                          Kopijuoti
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Veiksmų diagrama — suskleista pagal nutylėjimą, kad sąrašas būtų kompaktiškas */}
