@@ -23,6 +23,7 @@ async function fetchFromSupabase(): Promise<Project[]> {
 
 function validStageIds(sp: SelectedParts): StageId[] {
   const ids: StageId[] = ['SR'];
+  if (sp.DP) ids.push('DP');
   if (sp.PP) ids.push('PP');
   if (sp.VIESIMAS) ids.push('PP_VIESIMAS');
   if (sp.IP) ids.push('IP');
@@ -43,12 +44,15 @@ function migrateProject(p: Project): Project {
     p.selectedParts
   ) as SelectedParts;
   const valid = validStageIds(mergedSelectedParts);
+  // Jei activeStages yra aiškiai nustatytas masyvas (net tuščias — baigtas projektas),
+  // gerbiam jį; ['SR'] priverstinai statom tik migruojant senus įrašus be šio lauko.
+  const hadExplicitActive = Array.isArray(p.activeStages);
   const rawActive = p.activeStages ?? [(p as any).currentStage ?? 'SR'];
   const sanitizedActive = rawActive.filter((s: string) => valid.includes(s as StageId));
   return {
     ...p,
     clientEmail: p.clientEmail ?? '',
-    activeStages: sanitizedActive.length > 0 ? sanitizedActive : ['SR'],
+    activeStages: hadExplicitActive ? sanitizedActive : (sanitizedActive.length > 0 ? sanitizedActive : ['SR']),
     motyvuotiAtsakymai: p.motyvuotiAtsakymai ?? [],
     dokumentai: (() => {
       const merged = [
