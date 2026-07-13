@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Link from 'next/link';
+import AuthGate from './components/AuthGate';
+import LogoutLink from './components/LogoutLink';
 
 export const metadata: Metadata = {
   title: 'KA sprendimai – Projektų valdymas',
@@ -31,10 +33,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 + Naujas projektas
               </Link>
+              <LogoutLink />
             </div>
           </div>
         </header>
-        <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+        <main className="max-w-6xl mx-auto px-6 py-8">
+          <AuthGate>{children}</AuthGate>
+        </main>
       </body>
     </html>
   );
