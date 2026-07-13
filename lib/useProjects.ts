@@ -7,18 +7,41 @@ import { supabase } from './supabase';
 
 const STORAGE_KEY = 'openclaw_projects';
 
+export type SyncStatus = 'checking' | 'synced' | 'local-only';
+
+// Sync rezultato pranešėjas — hook'as užsiregistruoja, kad rodytų būseną UI.
+let onSyncResult: ((ok: boolean) => void) | null = null;
+
 async function upsertToSupabase(project: Project) {
-  await supabase.from('projects').upsert({ id: project.id, data: project, updated_at: new Date().toISOString() });
+  try {
+    const { error } = await supabase.from('projects').upsert({ id: project.id, data: project, updated_at: new Date().toISOString() });
+    onSyncResult?.(!error);
+  } catch {
+    onSyncResult?.(false);
+  }
 }
 
 async function deleteFromSupabase(id: string) {
-  await supabase.from('projects').delete().eq('id', id);
+  try {
+    const { error } = await supabase.from('projects').delete().eq('id', id);
+    onSyncResult?.(!error);
+  } catch {
+    onSyncResult?.(false);
+  }
 }
 
-async function fetchFromSupabase(): Promise<Project[]> {
-  const { data, error } = await supabase.from('projects').select('data').order('updated_at', { ascending: true });
-  if (error || !data) return [];
-  return data.map((row: { data: Project }) => row.data);
+async function fetchFromSupabase(): Promise<{ ok: boolean; projects: Project[] }> {
+  try {
+    const res = await Promise.race([
+      supabase.from('projects').select('data').order('updated_at', { ascending: true }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
+    ]);
+    const { data, error } = res as { data: { data: Project }[] | null; error: unknown };
+    if (error || !data) return { ok: false, projects: [] };
+    return { ok: true, projects: data.map(row => row.data) };
+  } catch {
+    return { ok: false, projects: [] };
+  }
 }
 
 function validStageIds(sp: SelectedParts): StageId[] {
@@ -100,9 +123,13 @@ function saveToLocalStorage(projects: Project[]) {
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('checking');
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
+    // Registruojam sync būsenos pranešėją (rašymo rezultatai keičia indikatorių)
+    onSyncResult = ok => setSyncStatus(ok ? 'synced' : 'local-only');
+
     // 1. Load localStorage immediately for fast first render
     const local = loadFromLocalStorage();
     if (local.length > 0) {
@@ -110,19 +137,17 @@ export function useProjects() {
     }
 
     // 2. Fetch from Supabase and merge (Supabase is source of truth)
-    fetchFromSupabase().then(remote => {
+    fetchFromSupabase().then(({ ok, projects: remote }) => {
+      setSyncStatus(ok ? 'synced' : 'local-only');
       if (remote.length > 0) {
         // Migrate remote projects and use them as source of truth
         const migrated = remote.map(migrateProject);
         setProjects(migrated);
         saveToLocalStorage(migrated);
-      } else if (local.length > 0) {
+      } else if (ok && local.length > 0) {
         // No remote data yet — push local data to Supabase (first-time migration)
         local.forEach(p => upsertToSupabase(p));
       }
-      setLoaded(true);
-    }).catch(() => {
-      // Supabase unavailable — fall back to localStorage
       setLoaded(true);
     });
 
@@ -165,6 +190,7 @@ export function useProjects() {
 
     return () => {
       channel.unsubscribe();
+      onSyncResult = null;
     };
   }, []);
 
@@ -649,6 +675,7 @@ export function useProjects() {
   return {
     projects,
     loaded,
+    syncStatus,
     addProject,
     updateProject,
     deleteProject,

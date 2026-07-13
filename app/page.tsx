@@ -7,6 +7,7 @@ import { useProjects } from '@/lib/useProjects';
 import { STAGES, calcStageDates, formatDate, TEAM_MEMBERS } from '@/lib/defaultData';
 import { Project, StageId, TeamMemberId } from '@/lib/types';
 import TasksSidebar from '@/app/components/TasksSidebar';
+import DataSafety from '@/app/components/DataSafety';
 import { useNotifications } from '@/lib/useNotifications';
 
 function getActiveStageIds(project: Project) {
@@ -281,7 +282,7 @@ function SoonDonut({ soon }: { soon: Alert[] }) {
 
 export default function Dashboard() {
   const router = useRouter();
-  const { projects, loaded, toggleStage, updateProject, toggleDocument, copyProject } = useProjects();
+  const { projects, loaded, syncStatus, toggleStage, updateProject, toggleDocument, copyProject } = useProjects();
   const [search, setSearch] = useState('');
   const [memberFilter, setMemberFilter] = useState<TeamMemberId | null>(null);
   const [stageFilter, setStageFilter] = useState<StageId | null>(null);
@@ -366,6 +367,8 @@ export default function Dashboard() {
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900">Projektai</h1>
         <div className="flex items-center gap-4">
+        <DataSafety projects={projects} syncStatus={syncStatus} />
+        <span className="text-slate-200">|</span>
         <Link href="/savane" className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1.5 font-medium">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
           Savaitė
@@ -435,8 +438,8 @@ export default function Dashboard() {
               {pausedProjects.length > 0 && (
                 <button
                   onClick={() => document.getElementById('sec-paused')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
-                >⏸ Pristabdyti ({pausedProjects.length})</button>
+                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors inline-flex items-center gap-1.5"
+                ><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>Pristabdyti ({pausedProjects.length})</button>
               )}
               {finishedProjects.length > 0 && (
                 <button
