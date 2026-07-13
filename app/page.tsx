@@ -790,18 +790,27 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  {/* Veiksmų diagrama */}
+                  {/* Veiksmų diagrama — suskleista pagal nutylėjimą, kad sąrašas būtų kompaktiškas */}
                   {(smartPlan.chain.length > 0 || smartPlan.parallel.length > 0) && (() => {
                     const allTasks = [...smartPlan.chain, ...smartPlan.parallel];
                     const isExpanded = expandedTasksId === project.id;
-                    const LIMIT = 3;
-                    const showAll = isExpanded || allTasks.length <= LIMIT;
+                    const blockedCount = smartPlan.chain.filter(a => !a.checkable).length;
                     return (
-                    <div className="px-5 pb-4 border-t border-slate-100 pt-3">
-                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Šios dienos darbai</p>
-                      <div style={{display:'block'}}>
+                    <div className="px-5 pb-3 border-t border-slate-100 pt-2.5">
+                      <button
+                        onClick={e => { e.preventDefault(); setExpandedTasksId(isExpanded ? null : project.id); }}
+                        className="w-full flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors"
+                      >
+                        <span className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>›</span>
+                        Šios dienos darbai ({allTasks.length})
+                        {blockedCount > 0 && (
+                          <span className="normal-case tracking-normal font-medium text-red-500 bg-red-50 border border-red-100 rounded-full px-2 py-0.5">{blockedCount} laukia</span>
+                        )}
+                      </button>
+                      {isExpanded && (
+                      <div style={{display:'block'}} className="mt-2">
                         {/* Sequential chain */}
-                        {smartPlan.chain.filter((_, i) => showAll || i < LIMIT).map((a, i) => {
+                        {smartPlan.chain.map((a, i) => {
                           const tsk = (project.taskStatuses ?? {})[a.taskKey] ?? {};
                           const blocked = !a.checkable;
                           return (
@@ -837,7 +846,7 @@ export default function Dashboard() {
                               </div>
                             )}
                             <div style={{display:'flex', flexDirection:'column', gap:'6px'}}>
-                              {smartPlan.parallel.filter((_, i) => showAll || smartPlan.chain.length + i < LIMIT).map(a => {
+                              {smartPlan.parallel.map(a => {
                                 const tsk = (project.taskStatuses ?? {})[a.taskKey] ?? {};
                                 return (
                                   <div key={a.taskKey} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -858,12 +867,8 @@ export default function Dashboard() {
                             </div>
                           </div>
                         )}
-                        {!showAll && allTasks.length > LIMIT && (
-                          <button onClick={e => { e.stopPropagation(); setExpandedTasksId(project.id); }} className="text-xs text-slate-400 hover:text-slate-600 mt-2 transition-colors">
-                            + {allTasks.length - LIMIT} daugiau...
-                          </button>
-                        )}
                       </div>
+                      )}
                     </div>
                     );
                   })()}
