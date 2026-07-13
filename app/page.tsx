@@ -298,6 +298,10 @@ export default function Dashboard() {
   const [expandedTasksId, setExpandedTasksId] = useState<string | null>(null);
   const [copyConfirmId, setCopyConfirmId] = useState<string | null>(null);
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>(() =>
+    typeof window !== 'undefined' && localStorage.getItem('ka_view') === 'table' ? 'table' : 'cards'
+  );
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null);
   const [pauseModal, setPauseModal] = useState<{ projectId: string; reason: string; until: string } | null>(null);
 
@@ -362,6 +366,24 @@ export default function Dashboard() {
       return new Date(a.targetConstructionDate).getTime() - new Date(b.targetConstructionDate).getTime();
     });
   }
+
+  // Aktyvių projektų sąrašas po paieškos/filtrų — naudojamas ir kortelių, ir lentelės vaizde
+  const visibleActive = sortProjects(activeProjects).filter(p => {
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      if (!p.name.toLowerCase().includes(q) && !p.address.toLowerCase().includes(q) && !p.client.toLowerCase().includes(q)) return false;
+    }
+    if (memberFilter) {
+      const assignees = p.stageAssignees ?? {};
+      const activeIds = p.activeStages ?? ['SR'];
+      if (!activeIds.some(sid => (assignees[sid as StageId] ?? []).includes(memberFilter))) return false;
+    }
+    if (stageFilter) {
+      const activeIds = p.activeStages ?? ['SR'];
+      if (!activeIds.includes(stageFilter)) return false;
+    }
+    return true;
+  });
 
   return (
     <div>
@@ -468,33 +490,17 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Stage filter + member filter + sort — one compact row */}
+          {/* Filtrai (suglausti) + rikiavimas + vaizdo perjungiklis */}
           <div className="flex flex-wrap gap-1.5 items-center mb-6">
-            {STAGES.map(s => (
-              <button
-                key={s.id}
-                onClick={() => setStageFilter(stageFilter === s.id ? null : s.id)}
-                className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${s.bgClass} ${s.textClass} ${
-                  stageFilter === s.id ? `ring-2 ring-offset-1 ${s.colorClass} opacity-100` : 'opacity-50 hover:opacity-80'
-                }`}
-              >
-                {s.shortName}
-              </button>
-            ))}
-            <div className="w-px h-5 bg-slate-200 mx-1" />
-            {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => (
-              <button
-                key={m.id}
-                onClick={() => setMemberFilter(memberFilter === m.id ? null : m.id)}
-                title={m.name}
-                className={`text-xs font-semibold w-7 h-7 rounded-full transition-all ${
-                  memberFilter === m.id ? `${m.color} ${m.textColor} ring-2 ring-offset-1 ring-current` : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                }`}
-              >
-                {m.initials}
-              </button>
-            ))}
-            <div className="w-px h-5 bg-slate-200 mx-1" />
+            <button
+              onClick={() => setShowFilters(v => !v)}
+              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all inline-flex items-center gap-1.5 ${
+                stageFilter || memberFilter ? 'bg-slate-900 text-white border-slate-900' : showFilters ? 'bg-slate-100 text-slate-700 border-slate-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              Filtrai{(stageFilter ? 1 : 0) + (memberFilter ? 1 : 0) > 0 ? ` (${(stageFilter ? 1 : 0) + (memberFilter ? 1 : 0)})` : ''}
+            </button>
             {([['deadline', '⚠ Vėluojantys'], ['name', 'A–Z'], ['stage', 'Etapas']] as const).map(([val, label]) => (
               <button
                 key={val}
@@ -506,7 +512,59 @@ export default function Dashboard() {
                 {label}
               </button>
             ))}
+            <div className="ml-auto flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
+              <button
+                onClick={() => { setViewMode('cards'); localStorage.setItem('ka_view', 'cards'); }}
+                title="Kortelių vaizdas"
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'}`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="18" height="7" rx="1"/></svg>
+              </button>
+              <button
+                onClick={() => { setViewMode('table'); localStorage.setItem('ka_view', 'table'); }}
+                title="Lentelės vaizdas"
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'}`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              </button>
+            </div>
           </div>
+
+          {/* Išskleisti filtrai */}
+          {showFilters && (
+            <div className="flex flex-wrap gap-1.5 items-center mb-6 -mt-3 bg-white border border-slate-200 rounded-xl p-3">
+              {STAGES.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => setStageFilter(stageFilter === s.id ? null : s.id)}
+                  className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${s.bgClass} ${s.textClass} ${
+                    stageFilter === s.id ? `ring-2 ring-offset-1 ${s.colorClass} opacity-100` : 'opacity-50 hover:opacity-80'
+                  }`}
+                >
+                  {s.shortName}
+                </button>
+              ))}
+              <div className="w-px h-5 bg-slate-200 mx-1" />
+              {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setMemberFilter(memberFilter === m.id ? null : m.id)}
+                  title={m.name}
+                  className={`text-xs font-semibold w-7 h-7 rounded-full transition-all ${
+                    memberFilter === m.id ? `${m.color} ${m.textColor} ring-2 ring-offset-1 ring-current` : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                  }`}
+                >
+                  {m.initials}
+                </button>
+              ))}
+              {(stageFilter || memberFilter) && (
+                <button
+                  onClick={() => { setStageFilter(null); setMemberFilter(null); }}
+                  className="text-xs text-slate-400 hover:text-slate-700 ml-1 transition-colors"
+                >× Išvalyti</button>
+              )}
+            </div>
+          )}
 
           {/* Work overview */}
           {(overdue.length > 0 || today.length > 0 || thisWeek.length > 0 || soon.length > 0) && (
@@ -594,25 +652,67 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Lentelės vaizdas — 1 eilutė = 1 projektas */}
+          {viewMode === 'table' && (
+            <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <th className="px-4 py-2.5 font-medium">Nr.</th>
+                    <th className="px-4 py-2.5 font-medium">Projektas</th>
+                    <th className="px-4 py-2.5 font-medium">Etapai</th>
+                    <th className="px-4 py-2.5 font-medium text-right">Statybos pradžia</th>
+                    <th className="px-4 py-2.5 font-medium text-right">Sutarta iki</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleActive.map(project => {
+                    const rowStages = stageLabels(project);
+                    const rowOverdue = overdueProjectIds.has(project.id);
+                    const todayIso = new Date().toISOString().slice(0, 10);
+                    const dlOverdue = !!project.deadline && project.deadline < todayIso;
+                    return (
+                      <tr
+                        key={project.id}
+                        onClick={() => router.push(`/projects/${project.id}`)}
+                        className="border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors"
+                      >
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-slate-400 whitespace-nowrap">{project.projectNumber ?? '—'}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {project.priority && <svg className="w-3.5 h-3.5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
+                            {project.paused && <svg className="w-3 h-3 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>}
+                            <span className="font-medium text-slate-800 truncate max-w-[340px]">{project.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex gap-1 flex-wrap">
+                            {rowStages.map(s => (
+                              <span key={s.id} className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${s.bgClass} ${s.textClass}`}>{s.shortName}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className={`px-4 py-2.5 text-right whitespace-nowrap ${rowOverdue ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
+                          {formatDate(project.targetConstructionDate)}{rowOverdue ? ' !' : ''}
+                        </td>
+                        <td className={`px-4 py-2.5 text-right whitespace-nowrap ${dlOverdue ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
+                          {project.deadline ? formatDate(project.deadline) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {visibleActive.length === 0 && (
+                    <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">Nėra projektų pagal filtrus</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {/* Project cards */}
+          {viewMode === 'cards' && (
           <div className="grid gap-4">
-            {sortProjects(activeProjects).filter(p => {
-              if (search.trim()) {
-                const q = search.toLowerCase();
-                if (!p.name.toLowerCase().includes(q) && !p.address.toLowerCase().includes(q) && !p.client.toLowerCase().includes(q)) return false;
-              }
-              if (memberFilter) {
-                const assignees = p.stageAssignees ?? {};
-                const activeIds = p.activeStages ?? ['SR'];
-                const hasMatch = activeIds.some(sid => (assignees[sid as StageId] ?? []).includes(memberFilter));
-                if (!hasMatch) return false;
-              }
-              if (stageFilter) {
-                const activeIds = p.activeStages ?? ['SR'];
-                if (!activeIds.includes(stageFilter)) return false;
-              }
-              return true;
-            }).map(project => {
+            {visibleActive.map(project => {
               const stages = stageLabels(project);
               const progress = progressPercent(project);
               const missingDocs = missingDocCount(project);
@@ -922,6 +1022,7 @@ export default function Dashboard() {
               );
             })}
           </div>
+          )}
 
           {/* Paused projects */}
           {pausedProjects.length > 0 && (
