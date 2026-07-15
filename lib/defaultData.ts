@@ -337,7 +337,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
 ];
 
 export const DEFAULT_STAGE_ASSIGNEES: Partial<Record<import('./types').StageId, import('./types').TeamMemberId[]>> = {
-  SR: ['NR'],
+  SR: ['NR', 'KV'], // KV — pirminė analizė SR etape
   PP: ['KV', 'NR'],
   PP_VIESIMAS: ['NR'],
   IP: ['NR'],

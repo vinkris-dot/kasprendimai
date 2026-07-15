@@ -10,16 +10,19 @@ import { Project, ResultInput, InputStatus, StageId } from './types';
 // Šablonai pagal rezultato id. Susietų įėjimų (docId/partId) būsena visada
 // gyva; rankiniai įėjimai įsirašo į project.inputs pirmo pakeitimo metu.
 export const DEFAULT_RESULT_INPUTS: Record<string, ResultInput[]> = {
+  // SR ir PP startui oficialių dokumentų nereikia — Kristina pirminę analizę ir
+  // koncepciją daro iš viešų šaltinių (Regia, planuojustatau.lt). Dokumentai
+  // pažymėti soft: reikalingi tik užbaigimui, starto neblokuoja (2026-07-15).
   SR: [
-    { id: 'in-sr-02', label: 'Nuosavybės dokumentas (02)', kind: 'dokumentas', docId: 'doc-02' },
-    { id: 'in-sr-03', label: 'Sklypo ribų planas (03)', kind: 'dokumentas', docId: 'doc-03' },
+    { id: 'in-sr-02', label: 'Nuosavybės dokumentas (02)', kind: 'dokumentas', docId: 'doc-02', soft: true },
+    { id: 'in-sr-03', label: 'Sklypo ribų planas (03)', kind: 'dokumentas', docId: 'doc-03', soft: true },
   ],
   PP: [
-    { id: 'in-pp-01', label: 'Projektavimo užduotis (01)', kind: 'info', docId: 'doc-01' },
-    { id: 'in-pp-02', label: 'Nuosavybės dokumentas (02)', kind: 'dokumentas', docId: 'doc-02' },
-    { id: 'in-pp-03', label: 'Sklypo ribų planas (03)', kind: 'dokumentas', docId: 'doc-03' },
-    { id: 'in-pp-04', label: 'Teritorijų planavimo ištrauka (04)', kind: 'dokumentas', docId: 'doc-04' },
-    { id: 'in-pp-07', label: 'Toponuotrauka (07)', kind: 'brezinys', docId: 'doc-07' },
+    { id: 'in-pp-01', label: 'Projektavimo užduotis (01)', kind: 'info', docId: 'doc-01', soft: true },
+    { id: 'in-pp-02', label: 'Nuosavybės dokumentas (02)', kind: 'dokumentas', docId: 'doc-02', soft: true },
+    { id: 'in-pp-03', label: 'Sklypo ribų planas (03)', kind: 'dokumentas', docId: 'doc-03', soft: true },
+    { id: 'in-pp-04', label: 'Teritorijų planavimo ištrauka (04)', kind: 'dokumentas', docId: 'doc-04', soft: true },
+    { id: 'in-pp-07', label: 'Toponuotrauka (07)', kind: 'brezinys', docId: 'doc-07', soft: true },
   ],
   VIESIMAS: [
     { id: 'in-vies-pp', label: 'PP baigtas', kind: 'brezinys', partId: 'PP' },
@@ -116,8 +119,9 @@ export function getInputStatus(project: Project, input: ResultInput): InputStatu
 
 export interface ResultReadiness {
   resultId: string;
-  ready: boolean;      // visi įėjimai yra
-  missing: number;     // kiek įėjimų dar nėra (įsk. užsakytus)
+  ready: boolean;      // startui netrūksta nė vieno kieto (ne soft) įėjimo
+  missing: number;     // kiek įėjimų dar nėra iš viso (įsk. soft ir užsakytus)
+  hardMissing: number; // kiek trūksta startą blokuojančių įėjimų
   waiting: number;     // kiek iš trūkstamų jau užsakyta/vyksta
   total: number;
   inputs: { input: ResultInput; status: InputStatus }[];
@@ -129,8 +133,9 @@ export function getResultReadiness(project: Project, resultId: string): ResultRe
     status: getInputStatus(project, input),
   }));
   const missing = inputs.filter(i => i.status !== 'yra').length;
+  const hardMissing = inputs.filter(i => i.status !== 'yra' && !i.input.soft).length;
   const waiting = inputs.filter(i => i.status === 'uzsakyta').length;
-  return { resultId, ready: missing === 0, missing, waiting, total: inputs.length, inputs };
+  return { resultId, ready: hardMissing === 0, missing, hardMissing, waiting, total: inputs.length, inputs };
 }
 
 /** Kurie rezultatai rodomi projekte (pasirinktos dalys, turinčios šablonų ar įrašų). */
@@ -170,7 +175,8 @@ export function getUnlockPriorities(project: Project): UnlockPriority[] {
   const byKey = new Map<string, UnlockPriority>();
   for (const resultId of getProjectResultIds(project)) {
     const readiness = getResultReadiness(project, resultId);
-    if (readiness.ready) continue;
+    // Soft įėjimai starto neblokuoja, bet gauti dokumentai vis tiek atrakina
+    // rezultato užbaigimą — todėl „ready" rezultatų trūkumai irgi skaičiuojami.
     for (const { input, status } of readiness.inputs) {
       if (status === 'yra') continue;
       const key = input.docId ? `doc:${input.docId}`

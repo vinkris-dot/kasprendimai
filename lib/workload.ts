@@ -11,7 +11,7 @@ import { tdpBlockDays } from './schedule';
 
 // ── Darbo sąnaudos (val.) etapui/daliai pagal žmogų — Kristinos įverčiai 2026-07-15 ──
 export const STAGE_EFFORT: Partial<Record<string, Partial<Record<TeamMemberId, number>>>> = {
-  SR: { NR: 10 },
+  SR: { NR: 10, KV: 3 }, // KV — pirminė analizė (~2 val. + retkarčiais savivaldybė)
   PP: { KV: 72, NR: 7 },
   PP_VIESIMAS: { NR: 10 },
   IP: { NR: 5 },

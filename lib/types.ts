@@ -186,6 +186,7 @@ export interface ResultInput {
   docId?: string;       // susietas su dokumentu — būsena išvedama iš dokumentai
   partId?: string;      // susietas su kitu rezultatu/etapu — būsena iš jo užbaigimo
   status?: InputStatus; // rankinė būsena nesusietiems įėjimams (skambutis, info...)
+  soft?: boolean;       // neblokuoja starto — reikalingas tik rezultato UŽBAIGIMUI
   notes?: string;
 }
 

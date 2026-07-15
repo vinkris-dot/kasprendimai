@@ -29,10 +29,11 @@ function markAllReceived(p: Project) {
 
 describe('getTeamWorkload', () => {
   it('skaičiuoja aktyvius priskirtus etapus žmogui', () => {
-    // Numatyta: SR→NR. Du projektai su aktyviu SR → NR total 2.
+    // Numatyta: SR→NR+KV (KV — pirminė analizė). Du projektai su aktyviu SR.
     const w = getTeamWorkload([makeProject(), makeProject()]);
     expect(w.NR.total).toBe(2);
-    expect(w.KV.total).toBe(0);
+    expect(w.KV.total).toBe(2);
+    expect(w.LL.total).toBe(0);
   });
 
   it('neaktyvūs etapai, pristabdyti ir archyvuoti projektai neskaičiuojami', () => {
@@ -43,16 +44,21 @@ describe('getTeamWorkload', () => {
     expect(w.NR.total).toBe(0);
   });
 
-  it('etapas be įėjimų — užblokuotas; su įėjimais — dirbamas', () => {
-    const blocked = makeProject(); // SR aktyvus, 02/03 negauti → blocked
-    const ready = makeProject();
+  it('SR dirbamas ir be dokumentų (soft įėjimai starto neblokuoja)', () => {
+    const p = makeProject(); // 02/03 negauti, bet analizę/užsakymą galima daryti
+    const w = getTeamWorkload([p]);
+    expect(w.NR.blocked).toBe(0);
+    expect(w.NR.workable).toBe(1);
+  });
+  it('SLD užblokuotas kietais įėjimais, gavus viską — dirbamas', () => {
+    const blocked = makeProject({ activeStages: ['SLD'] as StageId[] });
+    const ready = makeProject({ activeStages: ['SLD'] as StageId[], completedStages: ['PP'] as StageId[] });
     markAllReceived(ready);
     const w = getTeamWorkload([blocked, ready]);
-    expect(w.NR.total).toBe(2);
     expect(w.NR.blocked).toBe(1);
     expect(w.NR.workable).toBe(1);
     const b = w.NR.assignments.find(a => a.projectId === blocked.id);
-    expect(b).toMatchObject({ blocked: true, missing: 2 });
+    expect(b).toMatchObject({ blocked: true });
   });
 
   it('vienas etapas keliems žmonėms skaičiuojasi kiekvienam', () => {
@@ -89,11 +95,16 @@ describe('valandinė apkrova', () => {
     expect(w.KV.workableHours).toBeCloseTo(9, 1);
     expect(w.NR.workableHours).toBeCloseTo(7 / 8, 1);
   });
-  it('užblokuoto etapo valandos eina į blockedHours', () => {
-    const p = makeProject(); // SR be dokumentų → blocked
+  it('užblokuoto etapo valandos eina į blockedHours (SLD be įėjimų: 12 val./6 sav.)', () => {
+    const p = makeProject({ activeStages: ['SLD'] as StageId[] });
     const w = getTeamWorkload([p]);
     expect(w.NR.workableHours).toBe(0);
     expect(w.NR.blockedHours).toBeCloseTo(2, 1);
+  });
+  it('KV pirminė analizė SR etape: 3 val. / 5 sav. = 0.6 val./sav.', () => {
+    const p = makeProject();
+    const w = getTeamWorkload([p]);
+    expect(w.KV.workableHours).toBeCloseTo(0.6, 1);
   });
   it('TDP: pasirinktų dalių suma paskleista per bloką (SP+SA: 67 val. / 5 sav.)', () => {
     const p = makeProject({

@@ -121,10 +121,12 @@ export default function InputsTab({ project, updateProject, onOpenTab }: Props) 
             <div className="flex items-center gap-2 flex-wrap mb-3">
               <h3 className="text-sm font-semibold text-slate-800 flex-1">{resultLabel(resultId)}</h3>
               {readiness.ready ? (
-                <span className="text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ galima pradėti</span>
+                <span className="text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                  ✓ galima pradėti{readiness.missing > 0 ? ` · ${readiness.missing} užbaigimui` : ''}
+                </span>
               ) : (
                 <span className="text-xs font-medium bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full">
-                  trūksta {readiness.missing}{readiness.waiting > 0 ? ` (${readiness.waiting} užsakyta)` : ''}
+                  trūksta {readiness.hardMissing}{readiness.waiting > 0 ? ` (${readiness.waiting} užsakyta)` : ''}
                 </span>
               )}
             </div>
@@ -147,6 +149,9 @@ export default function InputsTab({ project, updateProject, onOpenTab }: Props) 
                     </span>
                     <span className={`text-sm flex-1 ${status === 'yra' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
                       {input.label}
+                      {input.soft && status !== 'yra' && (
+                        <span className="ml-1.5 text-[10px] text-slate-400 bg-slate-100 rounded px-1 py-px align-middle" title="Starto neblokuoja — reikalingas rezultato užbaigimui">užbaigimui</span>
+                      )}
                     </span>
                     {input.docId && (
                       <button onClick={() => onOpenTab('dokumentai')} className="text-xs text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100">

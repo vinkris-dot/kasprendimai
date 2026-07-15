@@ -84,11 +84,15 @@ describe('getInputStatus', () => {
 });
 
 describe('getResultReadiness', () => {
-  it('PP: trūksta visų 5, gavus visus — galima pradėti', () => {
+  it('PP: soft įėjimai starto neblokuoja — galima pradėti, bet trūksta užbaigimui', () => {
     const p = makeProject();
-    expect(getResultReadiness(p, 'PP')).toMatchObject({ ready: false, missing: 5, total: 5 });
+    expect(getResultReadiness(p, 'PP')).toMatchObject({ ready: true, missing: 5, hardMissing: 0, total: 5 });
     markReceived(p, 'doc-01', 'doc-02', 'doc-03', 'doc-04', 'doc-07');
     expect(getResultReadiness(p, 'PP')).toMatchObject({ ready: true, missing: 0 });
+  });
+  it('SLD: kieti įėjimai blokuoja startą', () => {
+    const p = makeProject(); // PP nebaigtas, 00/05/06 negauti
+    expect(getResultReadiness(p, 'SLD')).toMatchObject({ ready: false, hardMissing: 4 });
   });
   it('waiting skaičiuoja užsakytus', () => {
     const p = makeProject();
