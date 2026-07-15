@@ -7,6 +7,7 @@ import { useProjects } from '@/lib/useProjects';
 import { STAGES, calcStageDates, calcEffectiveStageDates, calcEffectiveTargetDate, formatDate, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { Project, StageId, TeamMemberId } from '@/lib/types';
 import TasksSidebar from '@/app/components/TasksSidebar';
+import AssistantPanel from '@/app/components/AssistantPanel';
 import { getUnlockPriorities, INPUT_KIND_META } from '@/lib/inputs';
 import DataSafety from '@/app/components/DataSafety';
 import { useNotifications } from '@/lib/useNotifications';
@@ -584,6 +585,9 @@ export default function Dashboard() {
               )}
             </div>
           )}
+
+          {/* AI asistentas — statusų diktavimas laisva kalba */}
+          <AssistantPanel projects={projects} updateProject={updateProject} toggleStage={toggleStage} finishProject={finishProject} />
 
           {/* Work overview */}
           {(overdue.length > 0 || today.length > 0 || thisWeek.length > 0 || soon.length > 0 || dayPriorities.length > 0) && (
