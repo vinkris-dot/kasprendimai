@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProjects } from '@/lib/useProjects';
-import { STAGES, calcStageDates, formatDate, TEAM_MEMBERS } from '@/lib/defaultData';
+import { STAGES, calcStageDates, formatDate, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { Project, StageId, TeamMemberId } from '@/lib/types';
 import TasksSidebar from '@/app/components/TasksSidebar';
+import { getUnlockPriorities, INPUT_KIND_META } from '@/lib/inputs';
 import DataSafety from '@/app/components/DataSafety';
 import { useNotifications } from '@/lib/useNotifications';
 
@@ -177,7 +178,7 @@ function buildAlerts(projects: Project[]): Alert[] {
       if (kind) {
         alerts.push({
           projectId: project.id,
-          projectName: project.name,
+          projectName: projectLabel(project),
           stageShortName: stageInfo.shortName,
           stageColorClass: stageInfo.colorClass,
           stageBgClass: stageInfo.bgClass,
@@ -350,11 +351,25 @@ export default function Dashboard() {
   const soon = alerts.filter(a => a.kind === 'next2weeks');
   const overdueProjectIds = new Set(overdue.map(a => a.projectId));
 
+  // Dienos prioritetai: įėjimai, atrakinantys daugiausiai rezultatų per visus projektus.
+  // Rodomi tik veiksmingi įėjimai (dokumentas/skambutis/info) — etapų baigtumą rodo grafikas.
+  const dayPriorities = activeProjects
+    .flatMap(p => getUnlockPriorities(p)
+      .filter(u => u.unlocks.length > 1 && !u.input.partId)
+      .map(u => ({ projectId: p.id, projectName: projectLabel(p), ...u })))
+    .sort((a, b) => b.unlocks.length - a.unlocks.length || (a.status === 'nera' ? -1 : 1))
+    .filter((() => { const perProject = new Map<string, number>(); return (u: { projectId: string }) => {
+      const n = perProject.get(u.projectId) ?? 0;
+      perProject.set(u.projectId, n + 1);
+      return n < 2; // daugiausiai 2 eilutės vienam projektui
+    }; })())
+    .slice(0, 6);
+
   function sortProjects(list: Project[]) {
     return [...list].sort((a, b) => {
       // Pirmumo projektai visada viršuje
       if (!!a.priority !== !!b.priority) return a.priority ? -1 : 1;
-      if (sortBy === 'name') return a.name.localeCompare(b.name, 'lt');
+      if (sortBy === 'name') return projectLabel(a).localeCompare(projectLabel(b), 'lt');
       if (sortBy === 'stage') {
         const stageOrder = (p: Project) => Math.min(...(p.activeStages ?? ['SR']).map(s => STAGES.findIndex(st => st.id === s)));
         return stageOrder(a) - stageOrder(b);
@@ -567,7 +582,7 @@ export default function Dashboard() {
           )}
 
           {/* Work overview */}
-          {(overdue.length > 0 || today.length > 0 || thisWeek.length > 0 || soon.length > 0) && (
+          {(overdue.length > 0 || today.length > 0 || thisWeek.length > 0 || soon.length > 0 || dayPriorities.length > 0) && (
             <div className="mb-8">
               <button
                 onClick={() => setShowOverview(v => !v)}
@@ -580,6 +595,27 @@ export default function Dashboard() {
               </button>
               {showOverview && (
                 <div className="space-y-4">
+                  {dayPriorities.length > 0 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wider mb-3">
+                        🔑 Dienos prioritetai — atrakina daugiausiai
+                      </p>
+                      <div className="space-y-2">
+                        {dayPriorities.map((u, i) => (
+                          <Link key={i} href={`/projects/${u.projectId}#iejimai`} className="flex items-center justify-between gap-3 hover:opacity-80 transition-opacity">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="shrink-0" title={INPUT_KIND_META[u.input.kind].label}>{INPUT_KIND_META[u.input.kind].icon}</span>
+                              <span className="text-sm font-medium text-slate-800 shrink-0">{u.input.label}</span>
+                              <span className="text-xs text-slate-500 truncate">{u.projectName}</span>
+                            </div>
+                            <span className="text-xs text-yellow-700 font-medium shrink-0">
+                              atrakina {u.unlocks.length}: {u.unlocks.join(', ')}
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {overdue.length > 0 && (
                     <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                       <p className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-3">
@@ -682,7 +718,7 @@ export default function Dashboard() {
                           <div className="flex items-center gap-1.5 min-w-0">
                             {project.priority && <svg className="w-3.5 h-3.5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
                             {project.paused && <svg className="w-3 h-3 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>}
-                            <span className="font-medium text-slate-800 truncate max-w-[340px]">{project.name}</span>
+                            <span className="font-medium text-slate-800 truncate max-w-[340px]">{projectLabel(project)}</span>
                           </div>
                         </td>
                         <td className="px-4 py-2.5">
@@ -750,10 +786,10 @@ export default function Dashboard() {
                         {project.projectNumber && <span className="text-[10px] font-mono text-slate-400 font-medium">{project.projectNumber}</span>}
                         <div className="flex items-center gap-1.5 min-w-0">
                           {project.priority && <svg className="w-3.5 h-3.5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
-                          <h2 className="font-semibold text-slate-900 truncate">{project.name}</h2>
+                          <h2 className="font-semibold text-slate-900 truncate">{projectLabel(project)}</h2>
                         </div>
-                        {project.address && project.address !== project.name && (
-                          <p className="text-sm text-slate-500 mt-0.5 truncate">{project.address}</p>
+                        {project.name && project.name !== projectLabel(project) && (
+                          <p className="text-sm text-slate-500 mt-0.5 truncate">{project.name}</p>
                         )}
                         {project.client && project.client !== project.name && project.client !== project.address && (
                           <p className="text-xs text-slate-400 mt-0.5">{project.client}</p>
@@ -1042,8 +1078,8 @@ export default function Dashboard() {
                     <div className="px-5 py-2.5 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-amber-600 shrink-0">⏸</span>
-                        <Link href={`/projects/${project.id}`} className="font-semibold text-slate-700 hover:text-slate-900 truncate">{project.name}</Link>
-                        {project.address && project.address !== project.name && <span className="text-sm text-slate-400 truncate hidden sm:block">{project.address}</span>}
+                        <Link href={`/projects/${project.id}`} className="font-semibold text-slate-700 hover:text-slate-900 truncate">{projectLabel(project)}</Link>
+                        {project.name !== projectLabel(project) && <span className="text-sm text-slate-400 truncate hidden sm:block">{project.name}</span>}
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
                         {project.pauseUntil && <span className="text-xs text-amber-500">kontrolė: {formatDate(project.pauseUntil)}</span>}
@@ -1087,10 +1123,10 @@ export default function Dashboard() {
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <h2 className="font-semibold text-slate-700 truncate">{project.name}</h2>
+                              <h2 className="font-semibold text-slate-700 truncate">{projectLabel(project)}</h2>
                               <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0">Baigtas</span>
                             </div>
-                            <p className="text-sm text-slate-400 mt-0.5 truncate">{project.address}</p>
+                            {project.name !== projectLabel(project) && <p className="text-sm text-slate-400 mt-0.5 truncate">{project.name}</p>}
                             <p className="text-xs text-slate-400 mt-0.5">{project.client}</p>
                           </div>
                           <div className="flex-shrink-0 text-right">
@@ -1146,10 +1182,10 @@ export default function Dashboard() {
                       <div className="flex items-center justify-between gap-4">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <h2 className="font-semibold text-slate-600 truncate text-sm">{project.name}</h2>
+                            <h2 className="font-semibold text-slate-600 truncate text-sm">{projectLabel(project)}</h2>
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0 inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archyvas</span>
                           </div>
-                          <p className="text-xs text-slate-400 mt-0.5">{project.client} · {project.address}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{project.client}{project.name !== projectLabel(project) ? ` · ${project.name}` : ''}</p>
                         </div>
                         <span className="text-xs text-slate-400 shrink-0">{formatDate(project.targetConstructionDate)}</span>
                       </div>

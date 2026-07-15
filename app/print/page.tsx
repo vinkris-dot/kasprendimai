@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
-import { STAGES, formatDate, calcStageDates } from '@/lib/defaultData';
+import { STAGES, formatDate, calcStageDates, projectLabel } from '@/lib/defaultData';
 import { Project, StageId } from '@/lib/types';
 
 function getActiveStageIds(project: Project): StageId[] {
@@ -72,9 +72,9 @@ export default function PrintAllPage() {
               {/* Project header */}
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h2 className="text-lg font-bold">{project.name}</h2>
-                  {project.address && project.address !== project.name && (
-                    <p className="text-sm text-slate-500">{project.address}</p>
+                  <h2 className="text-lg font-bold">{projectLabel(project)}</h2>
+                  {project.name !== projectLabel(project) && (
+                    <p className="text-sm text-slate-500">{project.name}</p>
                   )}
                   {project.client && project.client !== project.name && (
                     <p className="text-xs text-slate-400">{project.client}</p>

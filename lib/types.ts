@@ -174,6 +174,21 @@ export interface CustomPart {
   notes?: string;
 }
 
+// ── Įėjimų planavimas: „ko man reikia, kad galėčiau padaryti X" ──────────────
+
+export type InputKind = 'dokumentas' | 'skambutis' | 'brezinys' | 'info' | 'kita';
+export type InputStatus = 'nera' | 'uzsakyta' | 'yra';
+
+export interface ResultInput {
+  id: string;
+  label: string;
+  kind: InputKind;
+  docId?: string;       // susietas su dokumentu — būsena išvedama iš dokumentai
+  partId?: string;      // susietas su kitu rezultatu/etapu — būsena iš jo užbaigimo
+  status?: InputStatus; // rankinė būsena nesusietiems įėjimams (skambutis, info...)
+  notes?: string;
+}
+
 export interface ManualTask {
   id: string;
   label: string;
@@ -212,6 +227,7 @@ export interface Project {
   pauseReason?: string;
   pauseUntil?: string; // YYYY-MM-DD control date
   kitiDokumentai?: DocumentItem[];
+  inputs?: Record<string, ResultInput[]>; // „ko man reikia" sąrašai pagal rezultato id; jei rakto nėra — naudojamas šablonas
   bylos?: Record<string, BylaSection>; // keyed by part id: 'PP' | 'SLD' | 'TDP' etc.
   pakartotinisRounds?: number; // how many times PAKARTOTINIS was completed
   createdAt: string;

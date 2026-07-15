@@ -1,4 +1,5 @@
 import { Project, TeamMemberId } from './types';
+import { projectLabel } from './defaultData';
 
 export interface TaskItem {
   key: string;           // unique per-project: `${projectId}:${taskKey}`
@@ -162,7 +163,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
       ...t,
       key: `${project.id}:${t.taskKey}`,
       projectId: project.id,
-      projectName: project.name,
+      projectName: projectLabel(project),
     }));
 }
 
@@ -176,7 +177,7 @@ export function getManualTaskItems(project: Project): TaskItem[] {
       key: `${project.id}:${t.id}`,
       taskKey: t.id,
       projectId: project.id,
-      projectName: project.name,
+      projectName: projectLabel(project),
       label: t.label,
       assignee: t.assignee,
       dueDate: ts[t.id]?.dueDate ?? t.dueDate,
@@ -191,7 +192,7 @@ export function getManualTaskItems(project: Project): TaskItem[] {
 export function getAllTasks(projects: Project[]): TaskItem[] {
   const result: TaskItem[] = [];
   for (const p of projects) {
-    if (p.archived) continue;
+    if (p.archived || p.paused) continue; // pristabdytas projektas užduočių neturi
     result.push(...generateAutoTasks(p));
     result.push(...getManualTaskItems(p));
   }

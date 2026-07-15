@@ -128,6 +128,11 @@ export const DEFAULT_PARTS: SelectedParts = {
 };
 
 
+/** Projektai identifikuojami pagal ADRESĄ — sąrašuose jis rodomas pirmu planu. */
+export function projectLabel(p: { name: string; address?: string }): string {
+  return p.address?.trim() || p.name;
+}
+
 export function formatDate(iso: string): string {
   if (!iso) return '—';
   const [y, m, d] = iso.split('-');

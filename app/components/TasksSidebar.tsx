@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Project, ManualTask, TeamMemberId } from '@/lib/types';
-import { TEAM_MEMBERS } from '@/lib/defaultData';
+import { TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { getAllTasks, groupByUrgency, TaskItem } from '@/lib/tasks';
 
 // ── Personal notes (localStorage) ──────────────────────────────
@@ -167,7 +167,7 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
     setNewLabel(''); setNewAssignee(''); setNewDueDate(''); setAddingFor('');
   }
 
-  const activeProjects = projects.filter(p => !p.archived && (p.activeStages ?? []).length > 0);
+  const activeProjects = projects.filter(p => !p.archived && !p.paused && (p.activeStages ?? []).length > 0);
   const anyOpen = open || notesOpen;
 
   return (
@@ -251,7 +251,7 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
               </div>
               <select value={addingFor} onChange={e => setAddingFor(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-slate-400">
                 <option value="">Projektas...</option>
-                {activeProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {activeProjects.map(p => <option key={p.id} value={p.id}>{projectLabel(p)}</option>)}
               </select>
               <div className="flex gap-2">
                 <button onClick={addManualTask} disabled={!newLabel.trim() || !addingFor} className="flex-1 bg-slate-900 text-white text-xs font-medium py-2 rounded-lg hover:bg-slate-700 disabled:opacity-40 transition-colors">Pridėti</button>

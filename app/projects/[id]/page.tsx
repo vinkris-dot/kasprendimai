@@ -4,8 +4,10 @@ import { use, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
-import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, TEAM_MEMBERS } from '@/lib/defaultData';
+import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU, BylaSection, CustomPart } from '@/lib/types';
+import { getProjectResultIds, getResultReadiness } from '@/lib/inputs';
+import InputsTab from '@/app/components/InputsTab';
 
 const BYLA_SECTIONS: { id: string; label: string; partKey: string }[] = [
   { id: 'PP',  label: 'PP – Projektiniai pasiūlymai', partKey: 'PP' },
@@ -26,7 +28,7 @@ const GROUP_LABELS: Record<string, string> = {
   other: 'Kita',
 };
 
-type Tab = 'grafikas' | 'pp' | 'dokumentai' | 'motyvuoti' | 'pastabos' | 'pu' | 'bylos';
+type Tab = 'grafikas' | 'iejimai' | 'pp' | 'dokumentai' | 'motyvuoti' | 'pastabos' | 'pu' | 'bylos';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'I. Tekstinė ir dokumentų dalis': '📄',
@@ -62,7 +64,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     updateBylaSection, addBylaFile, removeBylaFile,
   } = useProjects();
 
-  const [tab, setTab] = useState<Tab>('grafikas');
+  // Deep-link iš dashboard'o: /projects/<id>#iejimai atidaro Įėjimų tabą.
+  // Lazy init saugus: iki `loaded` puslapis turinio nerenderina, tad hidracijos neišderina.
+  const [tab, setTab] = useState<Tab>(() =>
+    typeof window !== 'undefined' && window.location.hash === '#iejimai' ? 'iejimai' : 'grafikas');
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [notesValue, setNotesValue] = useState('');
@@ -249,8 +254,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   }).length;
   const isBylosComplete = bylaDone === allRequiredSections.length;
 
+  const readyResults = getProjectResultIds(project).map(rid => getResultReadiness(project, rid));
+  const readyCount = readyResults.filter(r => r.ready).length;
+
   const tabs: { id: Tab; label: string }[] = [
     { id: 'grafikas', label: 'Grafikas' },
+    { id: 'iejimai', label: `Įėjimai (${readyCount}/${readyResults.length} ✓)` },
     { id: 'pu', label: 'PU' },
     { id: 'dokumentai', label: `Dokumentai (${docsDone}/${project.dokumentai.length})` },
     { id: 'pp', label: `PP sąrašas (${ppDone}/${project.ppByla.length})` },
@@ -473,7 +482,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       Pirmumas
                     </span>
                   )}
-                  <h1 className="text-2xl font-semibold text-slate-900">{project.name}</h1>
+                  <h1 className="text-2xl font-semibold text-slate-900">{projectLabel(project)}</h1>
                   {currentStages.length === 0 && (
                     <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700">Baigtas</span>
                   )}
@@ -481,8 +490,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
                 </div>
-                {project.address && project.address !== project.name && (
-                  <p className="text-slate-500 text-sm mt-0.5">{project.address}</p>
+                {project.name !== projectLabel(project) && (
+                  <p className="text-slate-500 text-sm mt-0.5">{project.name}</p>
                 )}
                 <p className="text-slate-400 text-xs mt-0.5">{project.client}{project.clientEmail && <> · <a href={`mailto:${project.clientEmail}`} className="hover:text-slate-600">{project.clientEmail}</a></>}</p>
               </div>
@@ -1038,6 +1047,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       )}
 
       {/* DOKUMENTAI */}
+      {tab === 'iejimai' && (
+        <InputsTab project={project} updateProject={updateProject} onOpenTab={t => setTab(t)} />
+      )}
+
       {tab === 'dokumentai' && (
         <div>
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-5 text-xs text-slate-600">

@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
-import { STAGES, calcStageDates, formatDate, TEAM_MEMBERS } from '@/lib/defaultData';
+import { STAGES, calcStageDates, formatDate, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { Project, StageId, TeamMemberId } from '@/lib/types';
 import { getAllTasks, groupByUrgency } from '@/lib/tasks';
+import { getTeamWorkload, loadLevel, LoadLevel, StageAssignment } from '@/lib/workload';
 
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
@@ -110,21 +111,8 @@ export default function SavanePage() {
     .slice(0, 8);
 
   // ── Team workload ────────────────────────────────────────────────────────
-  const workload: Record<TeamMemberId, { name: string; id: string; stages: StageId[] }[]> = { NR: [], KV: [], LL: [], EXT: [] };
-  for (const p of active) {
-    for (const [sid, assignees] of Object.entries(p.stageAssignees ?? {})) {
-      if ((p.activeStages ?? []).includes(sid as StageId)) {
-        for (const a of (assignees ?? [])) {
-          const existing = workload[a].find(x => x.id === p.id);
-          if (existing) {
-            if (!existing.stages.includes(sid as StageId)) existing.stages.push(sid as StageId);
-          } else {
-            workload[a].push({ name: p.name, id: p.id, stages: [sid as StageId] });
-          }
-        }
-      }
-    }
-  }
+  const workload = getTeamWorkload(projects);
+  const maxTotal = Math.max(1, ...TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => workload[m.id].total));
 
   const todayFormatted = dateStr(TODAY);
   const weekEndFormatted = dateStr(WEEK_END);
@@ -167,7 +155,7 @@ export default function SavanePage() {
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-red-50 transition-colors group">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${stage?.bgClass} ${stage?.textClass}`}>{stage?.shortName}</span>
-                    <span className="text-sm text-slate-800 truncate group-hover:text-red-700">{project.name}</span>
+                    <span className="text-sm text-slate-800 truncate group-hover:text-red-700">{projectLabel(project)}</span>
                   </div>
                   <span className="text-sm font-semibold text-red-500 shrink-0 ml-4">{daysLate} d. vėluoja</span>
                 </Link>
@@ -188,7 +176,7 @@ export default function SavanePage() {
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-amber-50 transition-colors group">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${stage?.bgClass} ${stage?.textClass}`}>{stage?.shortName}</span>
-                    <span className="text-sm text-slate-800 truncate">{project.name}</span>
+                    <span className="text-sm text-slate-800 truncate">{projectLabel(project)}</span>
                   </div>
                   <div className="text-right shrink-0 ml-4">
                     <span className="text-sm font-medium text-amber-700">{daysLeft === 0 ? 'šiandien' : `${daysLeft} d.`}</span>
@@ -235,7 +223,7 @@ export default function SavanePage() {
               <Link key={project.id} href={`/projects/${project.id}`}
                 className="p-3 rounded-lg border border-slate-100 hover:border-amber-200 hover:bg-amber-50/50 transition-colors group">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-700 truncate group-hover:text-amber-800">{project.name}</span>
+                  <span className="text-xs font-semibold text-slate-700 truncate group-hover:text-amber-800">{projectLabel(project)}</span>
                   <span className="text-xs font-bold text-amber-600 shrink-0 ml-2">{missing.length}</span>
                 </div>
                 <div className="space-y-0.5">
@@ -253,39 +241,70 @@ export default function SavanePage() {
       )}
 
       {/* Team workload */}
-      <Section title="👥 Komandos krūvis šią savaitę" color="bg-slate-50 border-slate-100 text-slate-700">
+      <Section title="👥 Komandos apkrova" color="bg-slate-50 border-slate-100 text-slate-700">
+        <p className="text-xs text-slate-400 mb-4">
+          Dirbami = aktyvūs etapai, kuriems visi įėjimai yra. Laukia = trūksta įėjimų (dokumentų, ankstesnių etapų).
+          Perkrauta nuo 7 dirbamų etapų, daug — nuo 4.
+        </p>
         <div className="grid grid-cols-3 gap-4">
           {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => {
-            const items = workload[m.id] ?? [];
+            const mw = workload[m.id];
+            const level: LoadLevel = loadLevel(mw.workable);
+            const levelColor = level === 'over' ? 'bg-red-500' : level === 'high' ? 'bg-amber-400' : 'bg-emerald-500';
+            const levelText = level === 'over' ? 'text-red-600' : level === 'high' ? 'text-amber-600' : 'text-emerald-600';
+            const levelLabel = level === 'over' ? 'perkrauta' : level === 'high' ? 'daug' : 'ok';
+            // Grupuojam pagal projektą sąrašui
+            const byProject = new Map<string, { name: string; stages: StageAssignment[] }>();
+            for (const a of mw.assignments) {
+              const e = byProject.get(a.projectId);
+              if (e) e.stages.push(a);
+              else byProject.set(a.projectId, { name: a.projectName, stages: [a] });
+            }
+            // Dirbami projektai viršuje, laukiantys įėjimų — žemiau
+            const items = [...byProject.entries()].sort(([, a], [, b]) =>
+              Number(b.stages.some(s => !s.blocked)) - Number(a.stages.some(s => !s.blocked)));
             return (
               <div key={m.id} className="space-y-2">
-                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${m.color} ${m.textColor}`}>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${m.color} ${m.textColor}`}>
                   <span className="font-bold text-sm">{m.initials}</span>
-                  <span className="text-xs font-medium">{m.name}</span>
-                  <span className="text-xs font-bold ml-auto">{items.length}</span>
+                  <span className="text-xs font-medium truncate">{m.name}</span>
+                  <span className={`text-xs font-bold ml-auto shrink-0 ${level !== 'ok' ? levelText : ''}`}>
+                    {mw.workable}{mw.blocked > 0 ? ` +${mw.blocked}⏳` : ''}
+                  </span>
                 </div>
+                {/* Apkrovos juosta: dirbami (spalva pagal lygį) + laukiantys (pilka) */}
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex" title={`${mw.workable} dirbami, ${mw.blocked} laukia įėjimų`}>
+                  <div className={`${levelColor} h-full`} style={{ width: `${(mw.workable / maxTotal) * 100}%` }} />
+                  <div className="bg-slate-300 h-full" style={{ width: `${(mw.blocked / maxTotal) * 100}%` }} />
+                </div>
+                <p className={`text-[11px] pl-1 ${level !== 'ok' ? `font-semibold ${levelText}` : 'text-slate-400'}`}>
+                  {mw.workable} dirbam{mw.workable === 1 ? 'as' : 'i'} · {mw.blocked} laukia · {levelLabel}
+                </p>
                 {items.length === 0 ? (
                   <p className="text-xs text-slate-300 pl-1">Nepriskirta</p>
                 ) : (
                   <div className="space-y-1.5 pl-1">
-                    {items.slice(0, 5).map(({ name, id, stages }) => {
-                      const stageBadges = stages.map(sid => STAGES.find(s => s.id === sid)).filter(Boolean);
-                      return (
-                        <Link key={id} href={`/projects/${id}`} className="block group">
-                          <p className="text-xs text-slate-600 truncate group-hover:text-slate-900 leading-tight">{name}</p>
-                          {stageBadges.length > 0 && (
-                            <div className="flex flex-wrap gap-0.5 mt-0.5">
-                              {stageBadges.map(s => s && (
-                                <span key={s.id} className={`text-[9px] font-semibold px-1.5 py-0 rounded-full ${s.bgClass} ${s.textClass}`}>
-                                  {s.shortName}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </Link>
-                      );
-                    })}
-                    {items.length > 5 && <p className="text-xs text-slate-300">+ {items.length - 5} daugiau</p>}
+                    {items.slice(0, 6).map(([id, { name, stages }]) => (
+                      <Link key={id} href={`/projects/${id}#iejimai`} className="block group">
+                        <p className="text-xs text-slate-600 truncate group-hover:text-slate-900 leading-tight">{name}</p>
+                        <div className="flex flex-wrap gap-0.5 mt-0.5">
+                          {stages.map(a => {
+                            const s = STAGES.find(st => st.id === a.stageId);
+                            if (!s) return null;
+                            return (
+                              <span
+                                key={a.stageId}
+                                title={a.blocked ? `Laukia — trūksta ${a.missing} įėjim${a.missing === 1 ? 'o' : 'ų'}` : 'Galima dirbti'}
+                                className={`text-[9px] font-semibold px-1.5 py-0 rounded-full ${s.bgClass} ${s.textClass} ${a.blocked ? 'opacity-40' : ''}`}
+                              >
+                                {s.shortName}{a.blocked ? ' ⏳' : ''}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </Link>
+                    ))}
+                    {items.length > 6 && <p className="text-xs text-slate-300">+ {items.length - 6} daugiau</p>}
                   </div>
                 )}
               </div>
