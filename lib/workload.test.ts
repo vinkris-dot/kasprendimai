@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTeamWorkload, loadLevel } from './workload';
+import { getTeamWorkload, loadLevel, WEEKLY_CAPACITY } from './workload';
 import { createDefaultProject, DEFAULT_PARTS } from './defaultData';
 import { Project, StageId, TeamMemberId } from './types';
 
@@ -75,12 +75,50 @@ describe('getTeamWorkload', () => {
   });
 });
 
+describe('valandinė apkrova', () => {
+  it('SR etapas NR: 10 val. / 5 sav. = 2 val./sav.', () => {
+    const p = makeProject();
+    markAllReceived(p);
+    const w = getTeamWorkload([p]);
+    expect(w.NR.workableHours).toBeCloseTo(2, 1);
+  });
+  it('PP etapas: KV 72 val./8 sav. = 9, NR 7/8', () => {
+    const p = makeProject({ activeStages: ['PP'] as StageId[] });
+    markAllReceived(p);
+    const w = getTeamWorkload([p]);
+    expect(w.KV.workableHours).toBeCloseTo(9, 1);
+    expect(w.NR.workableHours).toBeCloseTo(7 / 8, 1);
+  });
+  it('užblokuoto etapo valandos eina į blockedHours', () => {
+    const p = makeProject(); // SR be dokumentų → blocked
+    const w = getTeamWorkload([p]);
+    expect(w.NR.workableHours).toBe(0);
+    expect(w.NR.blockedHours).toBeCloseTo(2, 1);
+  });
+  it('TDP: pasirinktų dalių suma paskleista per bloką (SP+SA: 67 val. / 5 sav.)', () => {
+    const p = makeProject({
+      activeStages: ['TDP'] as StageId[],
+      selectedParts: { ...DEFAULT_PARTS, SP: true, SA: true },
+      stageAssignees: { TDP: ['LL'] as TeamMemberId[] },
+    });
+    markAllReceived(p);
+    p.completedStages = ['SLD'] as StageId[];
+    const w = getTeamWorkload([p]);
+    // TDP blokas: 14 bazė + 7 SP + 14 SA = 35 d. = 5 sav.; (19+48)/5 = 13.4
+    expect(w.LL.workableHours).toBeCloseTo(13.4, 1);
+  });
+});
+
 describe('loadLevel', () => {
-  it('ribos: <4 ok, 4–6 high, >=7 over', () => {
-    expect(loadLevel(0)).toBe('ok');
-    expect(loadLevel(3)).toBe('ok');
-    expect(loadLevel(4)).toBe('high');
-    expect(loadLevel(6)).toBe('high');
-    expect(loadLevel(7)).toBe('over');
+  it('pagal panaudojimą: <80% ok, 80–100% high, >100% over', () => {
+    expect(loadLevel(10, 35)).toBe('ok');
+    expect(loadLevel(28, 35)).toBe('high');
+    expect(loadLevel(36, 35)).toBe('over');
+    expect(loadLevel(5, 0)).toBe('ok'); // EXT be pajėgumo
+  });
+  it('pajėgumai pagal Kristinos įvestį', () => {
+    expect(WEEKLY_CAPACITY.NR).toBe(35);
+    expect(WEEKLY_CAPACITY.KV).toBe(20);
+    expect(WEEKLY_CAPACITY.LL).toBe(35);
   });
 });

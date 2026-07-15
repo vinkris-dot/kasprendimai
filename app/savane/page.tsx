@@ -6,7 +6,7 @@ import { useProjects } from '@/lib/useProjects';
 import { STAGES, calcEffectiveStageDates, formatDate, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { Project, StageId, TeamMemberId } from '@/lib/types';
 import { getAllTasks, groupByUrgency } from '@/lib/tasks';
-import { getTeamWorkload, loadLevel, LoadLevel, StageAssignment } from '@/lib/workload';
+import { getTeamWorkload, loadLevel, LoadLevel, StageAssignment, WEEKLY_CAPACITY } from '@/lib/workload';
 
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
@@ -113,7 +113,6 @@ export default function SavanePage() {
 
   // ── Team workload ────────────────────────────────────────────────────────
   const workload = getTeamWorkload(projects);
-  const maxTotal = Math.max(1, ...TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => workload[m.id].total));
 
   const todayFormatted = dateStr(TODAY);
   const weekEndFormatted = dateStr(WEEK_END);
@@ -244,16 +243,19 @@ export default function SavanePage() {
       {/* Team workload */}
       <Section title="👥 Komandos apkrova" color="bg-slate-50 border-slate-100 text-slate-700">
         <p className="text-xs text-slate-400 mb-4">
-          Dirbami = aktyvūs etapai, kuriems visi įėjimai yra. Laukia = trūksta įėjimų (dokumentų, ankstesnių etapų).
-          Perkrauta nuo 7 dirbamų etapų, daug — nuo 4.
+          Apkrova = dirbamų etapų darbo valandos per savaitę (etapo sąnaudos ÷ trukmė) prieš žmogaus pajėgumą.
+          Laukia = valandos, kurios atsirakins gavus trūkstamus įėjimus. Perkrauta — virš 100 % pajėgumo, daug — nuo 80 %.
         </p>
         <div className="grid grid-cols-3 gap-4">
           {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => {
             const mw = workload[m.id];
-            const level: LoadLevel = loadLevel(mw.workable);
+            const cap = WEEKLY_CAPACITY[m.id];
+            const level: LoadLevel = loadLevel(mw.workableHours, cap);
             const levelColor = level === 'over' ? 'bg-red-500' : level === 'high' ? 'bg-amber-400' : 'bg-emerald-500';
             const levelText = level === 'over' ? 'text-red-600' : level === 'high' ? 'text-amber-600' : 'text-emerald-600';
             const levelLabel = level === 'over' ? 'perkrauta' : level === 'high' ? 'daug' : 'ok';
+            const wh = Math.round(mw.workableHours);
+            const bh = Math.round(mw.blockedHours);
             // Grupuojam pagal projektą sąrašui
             const byProject = new Map<string, { name: string; stages: StageAssignment[] }>();
             for (const a of mw.assignments) {
@@ -270,16 +272,17 @@ export default function SavanePage() {
                   <span className="font-bold text-sm">{m.initials}</span>
                   <span className="text-xs font-medium truncate">{m.name}</span>
                   <span className={`text-xs font-bold ml-auto shrink-0 ${level !== 'ok' ? levelText : ''}`}>
-                    {mw.workable}{mw.blocked > 0 ? ` +${mw.blocked}⏳` : ''}
+                    {wh}/{cap} val.
                   </span>
                 </div>
-                {/* Apkrovos juosta: dirbami (spalva pagal lygį) + laukiantys (pilka) */}
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex" title={`${mw.workable} dirbami, ${mw.blocked} laukia įėjimų`}>
-                  <div className={`${levelColor} h-full`} style={{ width: `${(mw.workable / maxTotal) * 100}%` }} />
-                  <div className="bg-slate-300 h-full" style={{ width: `${(mw.blocked / maxTotal) * 100}%` }} />
+                {/* Apkrovos juosta pajėgumo atžvilgiu: dirbamos val. (spalva pagal lygį) + laukiančios (pilka) */}
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex" title={`${wh} val./sav. dirbama, ${bh} val. laukia įėjimų, pajėgumas ${cap} val./sav.`}>
+                  <div className={`${levelColor} h-full`} style={{ width: `${Math.min(100, (mw.workableHours / cap) * 100)}%` }} />
+                  <div className="bg-slate-300 h-full" style={{ width: `${Math.max(0, Math.min(100 - (mw.workableHours / cap) * 100, (mw.blockedHours / cap) * 100))}%` }} />
                 </div>
                 <p className={`text-[11px] pl-1 ${level !== 'ok' ? `font-semibold ${levelText}` : 'text-slate-400'}`}>
-                  {mw.workable} dirbam{mw.workable === 1 ? 'as' : 'i'} · {mw.blocked} laukia · {levelLabel}
+                  {wh} val./sav. iš {cap} · {bh > 0 ? `+${bh} val. laukia · ` : ''}{levelLabel}
+                  <span className="text-slate-300"> · {mw.workable}/{mw.total} etapai</span>
                 </p>
                 {items.length === 0 ? (
                   <p className="text-xs text-slate-300 pl-1">Nepriskirta</p>
