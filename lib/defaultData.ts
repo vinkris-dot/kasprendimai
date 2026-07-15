@@ -75,14 +75,14 @@ export const PROJECT_PARTS: PartConfig[] = [
     id: 'SK',
     label: 'SK',
     description: 'Sklypo komunikacijos',
-    durationDays: 28, // 4 sav.
+    durationDays: 42, // 6 sav.
     group: 'tdp',
   },
   {
     id: 'LVN',
     label: 'LVN',
     description: 'Lietaus vandens nuvedimas',
-    durationDays: 14, // 2 sav.
+    durationDays: 28, // 4 sav.
     group: 'tdp',
   },
   {

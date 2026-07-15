@@ -64,8 +64,8 @@ function rawTdpDays(parts: SelectedParts): number {
   if (parts.BD) days += 7;
   if (parts.SP) days += 7;
   if (parts.SA) days += 14;
-  if (parts.SK) days += 28;
-  if (parts.LVN) days += 7;
+  if (parts.SK) days += 42; // 6 sav.
+  if (parts.LVN) days += 28; // 4 sav.
   return days;
 }
 

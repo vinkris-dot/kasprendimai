@@ -35,7 +35,8 @@ describe('calcTargetDate', () => {
     expect(calcTargetDate(start, { ...base, KITA: true, KITA_days: 21 })).toBe('2026-06-03');
   });
   it('pilna grandinė (viešinimas, IP, pakartotinis, ekspertizė, visos TDP dalys)', () => {
-    expect(calcTargetDate(start, { ...base, VIESIMAS: true, IP: true, PAKARTOTINIS: true, EKSPERTIZE: true, SK: true, LVN: true, BD: true })).toBe('2026-10-14');
+    // 2026-07-15: SK 4→6 sav., LVN →4 sav. (Kristinos patikslintos trukmės)
+    expect(calcTargetDate(start, { ...base, VIESIMAS: true, IP: true, PAKARTOTINIS: true, EKSPERTIZE: true, SK: true, LVN: true, BD: true })).toBe('2026-11-19');
   });
 });
 
