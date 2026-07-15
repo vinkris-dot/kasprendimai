@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
-import { STAGES, calcStageDates, formatDate, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
+import { STAGES, calcEffectiveStageDates, formatDate, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { Project, StageId, TeamMemberId } from '@/lib/types';
 import { getAllTasks, groupByUrgency } from '@/lib/tasks';
 import { getTeamWorkload, loadLevel, LoadLevel, StageAssignment } from '@/lib/workload';
@@ -68,7 +68,8 @@ export default function SavanePage() {
   // ── Overdue stages ───────────────────────────────────────────────────────
   const overdueStages: { project: Project; stageId: StageId; daysLate: number }[] = [];
   for (const p of active) {
-    const planned = calcStageDates(p.startDate, p.selectedParts);
+    // Efektyvios datos — vėlavimas nuo fakto, ne nuo pasenusio pradinio plano
+    const planned = calcEffectiveStageDates(p.startDate, p.selectedParts, p.stageStatuses ?? {}, p.customParts ?? []);
     for (const sid of (p.activeStages ?? [])) {
       const d = planned[sid as StageId];
       if (!d) continue;
@@ -84,7 +85,7 @@ export default function SavanePage() {
   // ── Stages ending this week ──────────────────────────────────────────────
   const thisWeekStages: { project: Project; stageId: StageId; endDate: string; daysLeft: number }[] = [];
   for (const p of active) {
-    const planned = calcStageDates(p.startDate, p.selectedParts);
+    const planned = calcEffectiveStageDates(p.startDate, p.selectedParts, p.stageStatuses ?? {}, p.customParts ?? []);
     for (const sid of (p.activeStages ?? [])) {
       const d = planned[sid as StageId];
       if (!d) continue;

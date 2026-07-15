@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProjects } from '@/lib/useProjects';
-import { STAGES, calcStageDates, formatDate, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
+import { STAGES, calcStageDates, calcEffectiveStageDates, calcEffectiveTargetDate, formatDate, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { Project, StageId, TeamMemberId } from '@/lib/types';
 import TasksSidebar from '@/app/components/TasksSidebar';
 import { getUnlockPriorities, INPUT_KIND_META } from '@/lib/inputs';
@@ -157,7 +157,9 @@ function buildAlerts(projects: Project[]): Alert[] {
   for (const project of projects) {
     if (project.paused) continue;
     const parts = project.selectedParts;
-    const planned = calcStageDates(project.startDate, parts);
+    // Efektyvios datos: faktinės etapų pradžios/pabaigos peranchoruoja planą,
+    // kad „vėluoja" rodytų tikrą vėlavimą, o ne pasenusį pradinį planą.
+    const planned = calcEffectiveStageDates(project.startDate, parts, project.stageStatuses ?? {}, project.customParts ?? []);
     const activeIds = project.activeStages ?? ['SR'];
 
     for (const stageId of activeIds) {
@@ -299,6 +301,7 @@ export default function Dashboard() {
   const [expandedTasksId, setExpandedTasksId] = useState<string | null>(null);
   const [copyConfirmId, setCopyConfirmId] = useState<string | null>(null);
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
+  const [replanConfirmId, setReplanConfirmId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>(() =>
     typeof window !== 'undefined' && localStorage.getItem('ka_view') === 'table' ? 'table' : 'cards'
@@ -908,6 +911,36 @@ export default function Dashboard() {
                       {project.paused ? 'Pristabdyta' : 'Pristabdyti'}
                     </button>
                     <div className="flex items-center gap-4">
+                      {isOverdue && (replanConfirmId === project.id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">Aktyvūs etapai — nuo šiandien?</span>
+                          <button onClick={e => {
+                            e.preventDefault();
+                            const today = new Date().toISOString().slice(0, 10);
+                            const newStatuses = { ...(project.stageStatuses ?? {}) };
+                            for (const sid of (project.activeStages ?? [])) {
+                              newStatuses[sid as StageId] = { ...(newStatuses[sid as StageId] ?? {}), startDate: today, endDate: '' } as import('@/lib/types').StageStatus;
+                            }
+                            updateProject(project.id, {
+                              stageStatuses: newStatuses,
+                              targetConstructionDate: calcEffectiveTargetDate(project.startDate, project.selectedParts, newStatuses, project.customParts ?? []),
+                            });
+                            setReplanConfirmId(null);
+                          }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
+                          <button onClick={e => { e.preventDefault(); setReplanConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={e => { e.preventDefault(); setReplanConfirmId(project.id); }}
+                          className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1 transition-colors"
+                          title="Perplanuoti: aktyvių etapų faktinė pradžia = šiandien, terminai perskaičiuojami"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path d="M3 12a9 9 0 1 0 9-9"/><polyline points="3 3 3 9 9 9"/>
+                          </svg>
+                          Perplanuoti
+                        </button>
+                      ))}
                       {archiveConfirmId === project.id ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">Archyvuoti?</span>

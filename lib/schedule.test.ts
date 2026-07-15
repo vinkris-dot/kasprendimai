@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, validStageIds } from './defaultData';
+import { calcTargetDate, calcStageDates, calcEffectiveStageDates, calcEffectiveTargetDate, calcCustomPartDates, validStageIds } from './defaultData';
 import { SelectedParts, CustomPart } from './types';
 
 // SVARBU: testai leidžiami su TZ=Europe/Vilnius (žr. package.json „test" skriptą),
@@ -99,5 +99,28 @@ describe('calcEffectiveStageDates', () => {
       SLD: { startDate: '2026-04-01', endDate: '2026-05-13', isShifted: false },
       TDP: { startDate: '2026-04-01', endDate: '2026-04-20', isShifted: false },
     });
+  });
+  it('vykstančio etapo faktinė pradžia (be pabaigos) peranchoruoja jo langą ir tolesnius', () => {
+    // PP faktiškai pradėtas 2026-03-01 (planas buvo 02-05) — langas 03-01 + 56 d.
+    expect(calcEffectiveStageDates(start, base, {
+      PP: { startDate: '2026-03-01', endDate: '', completed: false, notes: '' },
+    })).toEqual({
+      SR: { startDate: '2026-01-01', endDate: '2026-02-05' },
+      PP: { startDate: '2026-03-01', endDate: '2026-04-25', isShifted: true },
+      SLD: { startDate: '2026-04-25', endDate: '2026-06-06', isShifted: true },
+      TDP: { startDate: '2026-04-25', endDate: '2026-05-30', isShifted: true },
+    });
+  });
+});
+
+describe('calcEffectiveTargetDate', () => {
+  it('be faktų sutampa su planiniu', () => {
+    expect(calcEffectiveTargetDate(start, base, {})).toBe(calcTargetDate(start, base));
+  });
+  it('faktinė vykstančio etapo pradžia stumia statybos pradžią', () => {
+    // PP nuo 2026-03-01: +56 d. → 04-25; SLD ∥ TDP nuo ten (max 42 d.) → 06-06
+    expect(calcEffectiveTargetDate(start, base, {
+      PP: { startDate: '2026-03-01', endDate: '', completed: false, notes: '' },
+    })).toBe('2026-06-06');
   });
 });

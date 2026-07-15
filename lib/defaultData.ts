@@ -1,7 +1,7 @@
 import { StageInfo, ChecklistItem, DocumentItem, PartConfig, SelectedParts, TeamMember } from './types';
 
 // Grafiko skaičiavimai gyvena lib/schedule.ts — čia re-eksportuojama suderinamumui.
-export { calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, validStageIds } from './schedule';
+export { calcTargetDate, calcStageDates, calcEffectiveStageDates, calcEffectiveTargetDate, calcCustomPartDates, validStageIds } from './schedule';
 
 // ---------------------------------------------------------------------------
 // PROJECT PARTS – selectable, durations in calendar days

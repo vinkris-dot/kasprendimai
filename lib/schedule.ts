@@ -97,6 +97,11 @@ function walkSchedule(
     const actual = statuses?.[id]?.endDate;
     return actual ? new Date(actual) : plannedEnd;
   };
+  // Faktinė pradžia peranchoruoja etapo langą (o per kursorių — ir visus tolesnius)
+  const effStart = (id: StageId, plannedStart: Date): Date => {
+    const actual = statuses?.[id]?.startDate;
+    return actual ? new Date(actual) : plannedStart;
+  };
   // isShifted lyginamas su planiniu ėjimu (tik efektyviame režime)
   const planned = statuses ? walkSchedule(startDate, parts, customParts).stages : null;
   const shifted = (id: StageId, start: Date) =>
@@ -107,14 +112,16 @@ function walkSchedule(
 
   // DP — lygiagrečiai su SR+PP, nuo projekto pradžios
   if (parts.DP) {
-    const dpEnd = effEnd('DP', addDays(new Date(startDate), parts.DP_days || 84));
-    stages['DP'] = { startDate: fmt(new Date(startDate)), endDate: fmt(dpEnd) };
+    const dpStart = effStart('DP', new Date(startDate));
+    const dpEnd = effEnd('DP', addDays(dpStart, parts.DP_days || 84));
+    stages['DP'] = { startDate: fmt(dpStart), endDate: fmt(dpEnd) };
   }
 
   // SR (visada)
   {
-    const end = effEnd('SR', addDays(cursor, SR_DAYS));
-    stages['SR'] = { startDate: fmt(cursor), endDate: fmt(end) };
+    const start = effStart('SR', cursor);
+    const end = effEnd('SR', addDays(start, SR_DAYS));
+    stages['SR'] = { startDate: fmt(start), endDate: fmt(end) };
     cursor = end;
   }
 
@@ -126,8 +133,8 @@ function walkSchedule(
   ];
   for (const [on, id, days] of seq) {
     if (!on) continue;
-    const start = new Date(cursor);
-    const end = effEnd(id, addDays(cursor, days));
+    const start = effStart(id, cursor);
+    const end = effEnd(id, addDays(start, days));
     stages[id] = { startDate: fmt(start), endDate: fmt(end), ...shifted(id, start) };
     cursor = end;
   }
@@ -135,7 +142,7 @@ function walkSchedule(
   // DP gali pastumti SLD/TDP pradžią, jei tęsiasi ilgiau nei SR+PP blokas
   // (nebent DP jau faktiškai baigtas)
   if (parts.DP && !statuses?.['DP']?.endDate) {
-    const dpEnd = addDays(new Date(startDate), parts.DP_days || 84);
+    const dpEnd = addDays(effStart('DP', new Date(startDate)), parts.DP_days || 84);
     if (dpEnd > cursor) cursor = dpEnd;
   }
 
@@ -143,37 +150,42 @@ function walkSchedule(
   const parallelStart = new Date(cursor);
   const sldDays = parts.SLD ? 42 : 0;
   const tdpDays = rawTdpDays(parts);
+  const sldStart = effStart('SLD', parallelStart);
+  const tdpStart = effStart('TDP', parallelStart);
   let sldEnd = parallelStart;
   let tdpEnd = parallelStart;
   if (parts.SLD) {
-    sldEnd = effEnd('SLD', addDays(parallelStart, sldDays));
-    stages['SLD'] = { startDate: fmt(parallelStart), endDate: fmt(sldEnd), ...shifted('SLD', parallelStart) };
+    sldEnd = effEnd('SLD', addDays(sldStart, sldDays));
+    stages['SLD'] = { startDate: fmt(sldStart), endDate: fmt(sldEnd), ...shifted('SLD', sldStart) };
   }
   if (parts.TDP) {
-    tdpEnd = effEnd('TDP', addDays(parallelStart, tdpDays));
-    stages['TDP'] = { startDate: fmt(parallelStart), endDate: fmt(tdpEnd), ...shifted('TDP', parallelStart) };
+    tdpEnd = effEnd('TDP', addDays(tdpStart, tdpDays));
+    stages['TDP'] = { startDate: fmt(tdpStart), endDate: fmt(tdpEnd), ...shifted('TDP', tdpStart) };
   }
   cursor = sldEnd > tdpEnd ? sldEnd : tdpEnd;
 
   // Lygiagrečios papildomos dalys gali pratęsti bloką (jei TDP dar nebaigtas faktiškai)
   if (!statuses?.['TDP']?.endDate) {
-    const blockPlannedEnd = addDays(parallelStart, Math.max(sldDays, tdpBlockDays(parts, customParts)));
+    const blockPlannedEnd = new Date(Math.max(
+      addDays(sldStart, sldDays).getTime(),
+      addDays(tdpStart, tdpBlockDays(parts, customParts)).getTime(),
+    ));
     if (blockPlannedEnd > cursor) cursor = blockPlannedEnd;
   }
 
   // Pakartotinis derinimas
   if (parts.PAKARTOTINIS) {
-    const start = new Date(cursor);
-    const end = effEnd('PAKARTOTINIS', addDays(cursor, 28));
+    const start = effStart('PAKARTOTINIS', cursor);
+    const end = effEnd('PAKARTOTINIS', addDays(start, 28));
     stages['PAKARTOTINIS'] = { startDate: fmt(start), endDate: fmt(end), ...shifted('PAKARTOTINIS', start) };
     cursor = end;
   }
 
   // Ekspertizė (pabaiga visada planinė — faktas nekeičia lango)
   if (parts.EKSPERTIZE) {
-    const start = new Date(cursor);
+    const start = effStart('EKSPERTIZE', cursor);
     stages['EKSPERTIZE'] = { startDate: fmt(start), endDate: fmt(addDays(start, EKSPERTIZE_DAYS)), ...shifted('EKSPERTIZE', start) };
-    cursor = addDays(cursor, EKSPERTIZE_DAYS);
+    cursor = addDays(start, EKSPERTIZE_DAYS);
   }
 
   return { stages, chainEnd: cursor };
@@ -183,6 +195,22 @@ function walkSchedule(
 export function calcTargetDate(startDate: string, parts: SelectedParts, customParts: CustomPart[] = []): string {
   if (!startDate) return '';
   let end = walkSchedule(startDate, parts, customParts).chainEnd;
+  if (parts.KITA) end = addDays(end, parts.KITA_days || 14);
+  for (const c of customParts) {
+    if (!c.parallel && c.weeks > 0) end = addDays(end, c.weeks * 7);
+  }
+  return fmt(end);
+}
+
+/** Kaip calcTargetDate, bet grandinė perskaičiuojama nuo faktinių etapų datų. */
+export function calcEffectiveTargetDate(
+  startDate: string,
+  parts: SelectedParts,
+  stageStatuses: Partial<Record<StageId, StageStatus>>,
+  customParts: CustomPart[] = [],
+): string {
+  if (!startDate) return '';
+  let end = walkSchedule(startDate, parts, customParts, stageStatuses).chainEnd;
   if (parts.KITA) end = addDays(end, parts.KITA_days || 14);
   for (const c of customParts) {
     if (!c.parallel && c.weeks > 0) end = addDays(end, c.weeks * 7);
