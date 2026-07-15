@@ -202,6 +202,12 @@ function buildAlerts(projects: Project[]): Alert[] {
   });
 }
 
+// Gantt segmentams — pagal etapo id (Tailwind dinaminių klasių negeneruoja, todėl hex)
+const GANTT_HEX: Record<string, string> = {
+  DP: '#f43f5e', SR: '#3b82f6', PP: '#a855f7', PP_VIESIMAS: '#f97316', IP: '#eab308',
+  SLD: '#14b8a6', PAKARTOTINIS: '#2dd4bf', TDP: '#6366f1', EKSPERTIZE: '#ef4444',
+};
+
 const STAGE_HEX: Record<string, string> = {
   SR: '#3b82f6',
   PP: '#a855f7',
@@ -266,7 +272,7 @@ function SoonDonut({ soon }: { soon: Alert[] }) {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-3xl font-bold text-slate-900">{total}</span>
-          <span className="text-xs text-slate-400">etapų</span>
+          <span className="text-xs text-slate-500">etapų</span>
         </div>
       </div>
       <div className="flex flex-col gap-1.5 w-full">
@@ -416,7 +422,7 @@ export default function Dashboard() {
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
           Savaitė
         </Link>
-        <Link href="/print" target="_blank" className="text-sm text-slate-400 hover:text-slate-700 flex items-center gap-1.5">
+        <Link href="/print" target="_blank" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
           Spausdinti sąrašą
         </Link>
@@ -428,7 +434,7 @@ export default function Dashboard() {
               notifPermission === 'denied' ? 'Pranešimai užblokuoti naršyklėje' :
               'Įjungti pranešimus'
             }
-            className={`text-slate-400 hover:text-slate-700 transition-colors ${notifPermission === 'denied' ? 'opacity-30 cursor-not-allowed' : ''}`}
+            className={`text-slate-500 hover:text-slate-700 transition-colors ${notifPermission === 'denied' ? 'opacity-30 cursor-not-allowed' : ''}`}
           >
             {notifPermission === 'granted' ? (
               <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -450,7 +456,7 @@ export default function Dashboard() {
 
       {projects.length === 0 ? (
         <div className="text-center py-24 border-2 border-dashed border-slate-200 rounded-xl">
-          <p className="text-slate-400 text-sm mb-4">Nėra projektų</p>
+          <p className="text-slate-500 text-sm mb-4">Nėra projektų</p>
           <Link href="/projects/new" className="bg-slate-900 text-white text-sm px-5 py-2.5 rounded-lg hover:bg-slate-700 transition-colors">
             + Pridėti pirmą projektą
           </Link>
@@ -458,20 +464,20 @@ export default function Dashboard() {
       ) : (
         <>
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <div className="text-3xl font-bold text-slate-900">{activeProjects.length}</div>
-              <div className="text-sm text-slate-500 mt-1">Aktyvūs projektai</div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-8">
+            <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5 hover:shadow-sm transition-shadow">
+              <div className="text-2xl sm:text-3xl font-bold text-slate-900">{activeProjects.length}</div>
+              <div className="text-xs sm:text-sm text-slate-500 mt-1">Aktyvūs projektai</div>
             </div>
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <div className={`text-3xl font-bold ${overdueProjectIds.size > 0 ? 'text-red-600' : 'text-slate-900'}`}>{overdueProjectIds.size}</div>
-              <div className="text-sm text-slate-500 mt-1">Vėluojantys projektai</div>
+            <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5 hover:shadow-sm transition-shadow">
+              <div className={`text-2xl sm:text-3xl font-bold ${overdueProjectIds.size > 0 ? 'text-red-600' : 'text-slate-900'}`}>{overdueProjectIds.size}</div>
+              <div className="text-xs sm:text-sm text-slate-500 mt-1">Vėluojantys projektai</div>
             </div>
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <div className={`text-3xl font-bold ${activeProjects.filter(p => missingDocCount(p) > 0).length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
+            <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5 hover:shadow-sm transition-shadow">
+              <div className={`text-2xl sm:text-3xl font-bold ${activeProjects.filter(p => missingDocCount(p) > 0).length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
                 {activeProjects.filter(p => missingDocCount(p) > 0).length}
               </div>
-              <div className="text-sm text-slate-500 mt-1">Projektų trūksta dok.</div>
+              <div className="text-xs sm:text-sm text-slate-500 mt-1">Projektų trūksta dok.</div>
             </div>
           </div>
 
@@ -536,14 +542,14 @@ export default function Dashboard() {
               <button
                 onClick={() => { setViewMode('cards'); localStorage.setItem('ka_view', 'cards'); }}
                 title="Kortelių vaizdas"
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'}`}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="18" height="7" rx="1"/></svg>
               </button>
               <button
                 onClick={() => { setViewMode('table'); localStorage.setItem('ka_view', 'table'); }}
                 title="Lentelės vaizdas"
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'}`}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
               </button>
@@ -571,7 +577,7 @@ export default function Dashboard() {
                   onClick={() => setMemberFilter(memberFilter === m.id ? null : m.id)}
                   title={m.name}
                   className={`text-xs font-semibold w-7 h-7 rounded-full transition-all ${
-                    memberFilter === m.id ? `${m.color} ${m.textColor} ring-2 ring-offset-1 ring-current` : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                    memberFilter === m.id ? `${m.color} ${m.textColor} ring-2 ring-offset-1 ring-current` : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                   }`}
                 >
                   {m.initials}
@@ -580,7 +586,7 @@ export default function Dashboard() {
               {(stageFilter || memberFilter) && (
                 <button
                   onClick={() => { setStageFilter(null); setMemberFilter(null); }}
-                  className="text-xs text-slate-400 hover:text-slate-700 ml-1 transition-colors"
+                  className="text-xs text-slate-500 hover:text-slate-700 ml-1 transition-colors"
                 >× Išvalyti</button>
               )}
             </div>
@@ -667,7 +673,7 @@ export default function Dashboard() {
                           Šiandien{today.length > 0 ? ` — ${today.length}` : ''}
                         </p>
                         {today.length === 0 ? (
-                          <p className="text-xs text-slate-400">Nieko šiandien</p>
+                          <p className="text-xs text-slate-500">Nieko šiandien</p>
                         ) : (
                           <div className="space-y-2">
                             {today.map((a, i) => (
@@ -684,7 +690,7 @@ export default function Dashboard() {
                           Ateinančios 2 sav.
                         </p>
                         {soon.length === 0 ? (
-                          <p className="text-xs text-slate-400">Nieko artimiausiomis savaitėmis</p>
+                          <p className="text-xs text-slate-500">Nieko artimiausiomis savaitėmis</p>
                         ) : (
                           <SoonDonut soon={soon} />
                         )}
@@ -701,7 +707,7 @@ export default function Dashboard() {
             <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                  <tr className="text-left text-[11px] text-slate-500 uppercase tracking-wider border-b border-slate-100">
                     <th className="px-4 py-2.5 font-medium">Nr.</th>
                     <th className="px-4 py-2.5 font-medium">Projektas</th>
                     <th className="px-4 py-2.5 font-medium">Etapai</th>
@@ -721,7 +727,7 @@ export default function Dashboard() {
                         onClick={() => router.push(`/projects/${project.id}`)}
                         className="border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors"
                       >
-                        <td className="px-4 py-2.5 font-mono text-[11px] text-slate-400 whitespace-nowrap">{project.projectNumber ?? '—'}</td>
+                        <td className="px-4 py-2.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">{project.projectNumber ?? '—'}</td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {project.priority && <svg className="w-3.5 h-3.5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
@@ -739,14 +745,14 @@ export default function Dashboard() {
                         <td className={`px-4 py-2.5 text-right whitespace-nowrap ${rowOverdue ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
                           {formatDate(project.targetConstructionDate)}{rowOverdue ? ' !' : ''}
                         </td>
-                        <td className={`px-4 py-2.5 text-right whitespace-nowrap ${dlOverdue ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
+                        <td className={`px-4 py-2.5 text-right whitespace-nowrap ${dlOverdue ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
                           {project.deadline ? formatDate(project.deadline) : '—'}
                         </td>
                       </tr>
                     );
                   })}
                   {visibleActive.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">Nėra projektų pagal filtrus</td></tr>
+                    <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">Nėra projektų pagal filtrus</td></tr>
                   )}
                 </tbody>
               </table>
@@ -788,10 +794,10 @@ export default function Dashboard() {
                       <button onClick={e => { e.preventDefault(); updateProject(project.id, { paused: false, pauseReason: undefined, pauseUntil: undefined }); }} className="text-xs text-amber-600 hover:text-amber-800 font-medium shrink-0">Atnaujinti</button>
                     </div>
                   )}
-                  <Link href={`/projects/${project.id}`} className="block p-5 pb-3">
-                    <div className="flex items-start justify-between gap-4">
+                  <Link href={`/projects/${project.id}`} className="block p-4 sm:p-5 pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
                       <div className="min-w-0">
-                        {project.projectNumber && <span className="text-[10px] font-mono text-slate-400 font-medium">{project.projectNumber}</span>}
+                        {project.projectNumber && <span className="text-[10px] font-mono text-slate-500 font-medium">{project.projectNumber}</span>}
                         <div className="flex items-center gap-1.5 min-w-0">
                           {project.priority && <svg className="w-3.5 h-3.5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
                           <h2 className="font-semibold text-slate-900 truncate">{projectLabel(project)}</h2>
@@ -800,11 +806,11 @@ export default function Dashboard() {
                           <p className="text-sm text-slate-500 mt-0.5 truncate">{project.name}</p>
                         )}
                         {project.client && project.client !== project.name && project.client !== project.address && (
-                          <p className="text-xs text-slate-400 mt-0.5">{project.client}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{project.client}</p>
                         )}
                       </div>
-                      <div className="flex-shrink-0 text-right flex flex-col items-end gap-1">
-                        <div className="flex flex-wrap gap-1 justify-end">
+                      <div className="flex-shrink-0 flex flex-col items-start sm:items-end sm:text-right gap-1">
+                        <div className="flex flex-wrap gap-1 sm:justify-end">
                           {stages.map(stage => (
                             <span key={stage.id} className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full ${stage.bgClass} ${stage.textClass}`}>
                               {stage.shortName}
@@ -826,31 +832,36 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* Mini Gantt */}
-                    <div className="mt-4 relative">
-                      <div className="flex h-3 rounded-full overflow-hidden bg-slate-100 relative">
-                        {availableStages.map(s => {
-                          const d = plannedDates[s.id];
-                          if (!d) return null;
-                          const stageMs = new Date(d.endDate).getTime() - new Date(d.startDate).getTime();
-                          const pct = (stageMs / totalMs) * 100;
-                          const isPast = (project.completedStages ?? []).includes(s.id);
-                          const isCurrent = currentStageIds.includes(s.id);
-                          return (
-                            <div
-                              key={s.id}
-                              title={`${s.shortName}: ${formatDate(d.startDate)} → ${formatDate(d.endDate)}`}
-                              style={{ width: `${pct}%` }}
-                              className={`h-full transition-colors border-r border-white/40 last:border-0 ${
-                                isPast ? 'bg-slate-400' : isCurrent ? s.colorClass.replace('border-l-', 'bg-').replace('-500','-400') || 'bg-slate-700' : 'bg-slate-200'
-                              }`}
-                            />
-                          );
-                        })}
-                        {/* Today marker */}
-                        <div className="absolute top-0 bottom-0 w-0.5 bg-red-400 opacity-80" style={{ left: `${todayPct}%` }} />
+                    {/* Mini Gantt — etapai savo spalvomis: praėję blyškūs, dabartiniai ryškūs */}
+                    <div className="mt-4">
+                      <div className="relative">
+                        <div className="flex h-3 rounded-full overflow-hidden bg-slate-100">
+                          {availableStages.map(s => {
+                            const d = plannedDates[s.id];
+                            if (!d) return null;
+                            const stageMs = new Date(d.endDate).getTime() - new Date(d.startDate).getTime();
+                            const pct = (stageMs / totalMs) * 100;
+                            const isPast = (project.completedStages ?? []).includes(s.id);
+                            const isCurrent = currentStageIds.includes(s.id);
+                            // Tailwind dinaminių klasių negeneruoja — spalvos hex'u
+                            const hex = GANTT_HEX[s.id] ?? '#94a3b8';
+                            return (
+                              <div
+                                key={s.id}
+                                title={`${s.shortName}: ${formatDate(d.startDate)} → ${formatDate(d.endDate)}`}
+                                style={{
+                                  width: `${pct}%`,
+                                  backgroundColor: isCurrent ? hex : isPast ? `${hex}55` : '#e2e8f0',
+                                }}
+                                className="h-full transition-colors border-r border-white/60 last:border-0"
+                              />
+                            );
+                          })}
+                        </div>
+                        {/* Šiandienos žymė */}
+                        <div className="absolute -top-1 -bottom-1 w-[2px] bg-red-500 rounded-full" style={{ left: `${todayPct}%` }} title="Šiandien" />
                       </div>
-                      <div className="flex justify-between mt-1.5 text-xs text-slate-400">
+                      <div className="flex justify-between mt-1.5 text-xs text-slate-500">
                         <span>{formatDate(project.startDate)}</span>
                         <div className="flex items-center gap-1">
                           {isOverdue && <span className="text-red-500 font-medium">vėluoja</span>}
@@ -862,7 +873,7 @@ export default function Dashboard() {
                         const today = new Date().toISOString().slice(0, 10);
                         const dlOverdue = project.deadline < today;
                         return (
-                          <div className={`mt-1 text-xs flex items-center gap-1 ${dlOverdue ? 'text-red-500' : 'text-slate-400'}`}>
+                          <div className={`mt-1 text-xs flex items-center gap-1 ${dlOverdue ? 'text-red-500' : 'text-slate-500'}`}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             Sutarta iki: <strong>{formatDate(project.deadline)}</strong>{dlOverdue ? ' (vėluoja!)' : ''}
                           </div>
@@ -876,7 +887,7 @@ export default function Dashboard() {
                       <div className="flex-1 bg-slate-100 rounded-full h-1">
                         <div className="bg-emerald-500 h-1 rounded-full transition-all" style={{ width: `${progress}%` }} />
                       </div>
-                      <span className="text-xs text-slate-400">{progress}%</span>
+                      <span className="text-xs text-slate-500">{progress}%</span>
                     </div>
                   </Link>
 
@@ -894,7 +905,7 @@ export default function Dashboard() {
                               className="w-4 h-4 rounded border-amber-300 text-emerald-500 cursor-pointer"
                             />
                             <span className="text-xs text-slate-700 group-hover:text-slate-900 transition-colors">
-                              <span className="text-slate-400 mr-1">{doc.number}</span>
+                              <span className="text-slate-500 mr-1">{doc.number}</span>
                               {doc.name}
                             </span>
                           </label>
@@ -904,10 +915,10 @@ export default function Dashboard() {
                   )}
 
                   {/* Copy + Pause buttons */}
-                  <div className="px-5 py-2 border-t border-slate-100 flex items-center justify-between">
+                  <div className="px-4 sm:px-5 py-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-y-1.5">
                     <button
                       onClick={e => { e.preventDefault(); setPauseModal({ projectId: project.id, reason: project.pauseReason ?? '', until: project.pauseUntil ?? '' }); }}
-                      className={`text-xs flex items-center gap-1 transition-colors ${project.paused ? 'text-amber-500 hover:text-amber-700 font-medium' : 'text-slate-400 hover:text-amber-600'}`}
+                      className={`text-xs flex items-center gap-1 transition-colors ${project.paused ? 'text-amber-500 hover:text-amber-700 font-medium' : 'text-slate-500 hover:text-amber-600'}`}
                       title="Pristabdyti projektą"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -915,12 +926,12 @@ export default function Dashboard() {
                       </svg>
                       {project.paused ? 'Pristabdyta' : 'Pristabdyti'}
                     </button>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                       {finishConfirmId === project.id ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">Užbaigti visus etapus?</span>
                           <button onClick={e => { e.preventDefault(); finishProject(project.id); setFinishConfirmId(null); }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
-                          <button onClick={e => { e.preventDefault(); setFinishConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
+                          <button onClick={e => { e.preventDefault(); setFinishConfirmId(null); }} className="text-xs text-slate-500 hover:text-slate-600 transition-colors">Ne</button>
                         </div>
                       ) : (
                         <button
@@ -950,7 +961,7 @@ export default function Dashboard() {
                             });
                             setReplanConfirmId(null);
                           }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
-                          <button onClick={e => { e.preventDefault(); setReplanConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
+                          <button onClick={e => { e.preventDefault(); setReplanConfirmId(null); }} className="text-xs text-slate-500 hover:text-slate-600 transition-colors">Ne</button>
                         </div>
                       ) : (
                         <button
@@ -968,12 +979,12 @@ export default function Dashboard() {
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">Archyvuoti?</span>
                           <button onClick={e => { e.preventDefault(); updateProject(project.id, { archived: true }); setArchiveConfirmId(null); }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
-                          <button onClick={e => { e.preventDefault(); setArchiveConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
+                          <button onClick={e => { e.preventDefault(); setArchiveConfirmId(null); }} className="text-xs text-slate-500 hover:text-slate-600 transition-colors">Ne</button>
                         </div>
                       ) : (
                         <button
                           onClick={e => { e.preventDefault(); setArchiveConfirmId(project.id); }}
-                          className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors"
+                          className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors"
                           title="Perkelti į archyvą"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -986,12 +997,12 @@ export default function Dashboard() {
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">Kopijuoti?</span>
                           <button onClick={e => { e.preventDefault(); const copy = copyProject(project); setCopyConfirmId(null); router.push(`/projects/${copy.id}`); }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
-                          <button onClick={e => { e.preventDefault(); setCopyConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
+                          <button onClick={e => { e.preventDefault(); setCopyConfirmId(null); }} className="text-xs text-slate-500 hover:text-slate-600 transition-colors">Ne</button>
                         </div>
                       ) : (
                         <button
                           onClick={e => { e.preventDefault(); setCopyConfirmId(project.id); }}
-                          className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors"
+                          className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors"
                           title="Kopijuoti projektą"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1012,7 +1023,7 @@ export default function Dashboard() {
                     <div className="px-5 pb-3 border-t border-slate-100 pt-2.5">
                       <button
                         onClick={e => { e.preventDefault(); setExpandedTasksId(isExpanded ? null : project.id); }}
-                        className="w-full flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors"
+                        className="w-full flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-600 transition-colors"
                       >
                         <span className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>›</span>
                         Šios dienos darbai ({allTasks.length})
@@ -1036,9 +1047,9 @@ export default function Dashboard() {
                                   <span className={`text-xs font-medium ${blocked ? 'text-red-700' : 'text-slate-700'}`}>{a.text}</span>
                                 </div>
                                 <div className="flex items-center gap-2 mt-1 pl-6">
-                                  {a.sub && <span className="text-xs text-slate-400 flex-1">— {a.sub}</span>}
+                                  {a.sub && <span className="text-xs text-slate-500 flex-1">— {a.sub}</span>}
                                   <div className="relative shrink-0" onClick={e => { e.stopPropagation(); (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.(); }}>
-                                    <span className="flex items-center gap-1 text-xs border border-slate-200 rounded px-1.5 py-0.5 w-28 text-slate-400 bg-white"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{tsk.dueDate ? formatDate(tsk.dueDate) : '—'}</span>
+                                    <span className="flex items-center gap-1 text-xs border border-slate-200 rounded px-1.5 py-0.5 w-28 text-slate-500 bg-white"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{tsk.dueDate ? formatDate(tsk.dueDate) : '—'}</span>
                                     <input type="date" value={tsk.dueDate ?? ''} onChange={e => { e.stopPropagation(); updateProject(project.id, { taskStatuses: { ...(project.taskStatuses ?? {}), [a.taskKey]: { ...tsk, dueDate: e.target.value } } }); }} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
                                   </div>
                                 </div>
@@ -1054,7 +1065,7 @@ export default function Dashboard() {
                           <div>
                             {smartPlan.chain.length > 0 && (
                               <div className="flex items-center gap-2 mb-1.5">
-                                <span className="text-xs text-slate-400 font-medium">Lygiagrečiai</span>
+                                <span className="text-xs text-slate-500 font-medium">Lygiagrečiai</span>
                                 <div className="flex-1 h-px bg-slate-100" />
                               </div>
                             )}
@@ -1068,9 +1079,9 @@ export default function Dashboard() {
                                       <span className="text-xs text-slate-700">{a.text}</span>
                                     </div>
                                     <div className="flex items-center gap-2 mt-1 pl-6">
-                                      {a.sub && <span className="text-xs text-slate-400 flex-1">— {a.sub}</span>}
+                                      {a.sub && <span className="text-xs text-slate-500 flex-1">— {a.sub}</span>}
                                       <div className="relative shrink-0" onClick={e => { e.stopPropagation(); (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.(); }}>
-                                        <span className="flex items-center gap-1 text-xs border border-slate-200 rounded px-1.5 py-0.5 w-28 text-slate-400 bg-white"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{tsk.dueDate ? formatDate(tsk.dueDate) : '—'}</span>
+                                        <span className="flex items-center gap-1 text-xs border border-slate-200 rounded px-1.5 py-0.5 w-28 text-slate-500 bg-white"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>{tsk.dueDate ? formatDate(tsk.dueDate) : '—'}</span>
                                         <input type="date" value={tsk.dueDate ?? ''} onChange={e => { e.stopPropagation(); updateProject(project.id, { taskStatuses: { ...(project.taskStatuses ?? {}), [a.taskKey]: { ...tsk, dueDate: e.target.value } } }); }} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
                                       </div>
                                     </div>
@@ -1088,7 +1099,7 @@ export default function Dashboard() {
 
                   {/* Quick stage toggles */}
                   <div className="px-5 pb-4 border-t border-slate-100 pt-3">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Aktyvūs etapai</p>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Aktyvūs etapai</p>
                     <div className="flex gap-1.5 flex-wrap">
                     {availableStages.map(s => {
                       const isOn = currentStageIds.includes(s.id);
@@ -1101,7 +1112,7 @@ export default function Dashboard() {
                           className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-all ${
                             isOn
                               ? `${s.bgClass} ${s.textClass} border-transparent`
-                              : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'
+                              : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
                           }`}
                         >
                           {shortLabel}
@@ -1135,12 +1146,12 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-amber-600 shrink-0">⏸</span>
                         <Link href={`/projects/${project.id}`} className="font-semibold text-slate-700 hover:text-slate-900 truncate">{projectLabel(project)}</Link>
-                        {project.name !== projectLabel(project) && <span className="text-sm text-slate-400 truncate hidden sm:block">{project.name}</span>}
+                        {project.name !== projectLabel(project) && <span className="text-sm text-slate-500 truncate hidden sm:block">{project.name}</span>}
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
                         {project.pauseUntil && <span className="text-xs text-amber-500">kontrolė: {formatDate(project.pauseUntil)}</span>}
                         <button onClick={() => updateProject(project.id, { paused: false, pauseReason: undefined, pauseUntil: undefined })} className="text-xs text-amber-600 hover:text-amber-800 font-medium">Atnaujinti</button>
-                        <button onClick={() => setPauseModal({ projectId: project.id, reason: project.pauseReason ?? '', until: project.pauseUntil ?? '' })} className="text-xs text-slate-400 hover:text-slate-600">Redaguoti</button>
+                        <button onClick={() => setPauseModal({ projectId: project.id, reason: project.pauseReason ?? '', until: project.pauseUntil ?? '' })} className="text-xs text-slate-500 hover:text-slate-600">Redaguoti</button>
                       </div>
                     </div>
                     {project.pauseReason && <div className="px-5 pb-3 text-sm text-amber-700">{project.pauseReason}</div>}
@@ -1182,15 +1193,15 @@ export default function Dashboard() {
                               <h2 className="font-semibold text-slate-700 truncate">{projectLabel(project)}</h2>
                               <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0">Baigtas</span>
                             </div>
-                            {project.name !== projectLabel(project) && <p className="text-sm text-slate-400 mt-0.5 truncate">{project.name}</p>}
-                            <p className="text-xs text-slate-400 mt-0.5">{project.client}</p>
+                            {project.name !== projectLabel(project) && <p className="text-sm text-slate-500 mt-0.5 truncate">{project.name}</p>}
+                            <p className="text-xs text-slate-500 mt-0.5">{project.client}</p>
                           </div>
                           <div className="flex-shrink-0 text-right">
                             <div className="flex-1 flex items-center gap-2 mt-1">
                               <div className="w-20 bg-slate-200 rounded-full h-1">
                                 <div className="bg-green-500 h-1 rounded-full" style={{ width: `${progress}%` }} />
                               </div>
-                              <span className="text-xs text-slate-400">{progress}%</span>
+                              <span className="text-xs text-slate-500">{progress}%</span>
                             </div>
                           </div>
                         </div>
@@ -1199,7 +1210,7 @@ export default function Dashboard() {
                             <div key={s.id} title={s.shortName} className="h-1.5 flex-1 rounded-full bg-slate-400" />
                           ))}
                         </div>
-                        <div className="flex justify-between mt-2 text-xs text-slate-400">
+                        <div className="flex justify-between mt-2 text-xs text-slate-500">
                           <span>Pradžia: {formatDate(project.startDate)}</span>
                           <span>Tikslas: {formatDate(project.targetConstructionDate)}</span>
                         </div>
@@ -1221,7 +1232,7 @@ export default function Dashboard() {
             <div className="mt-8 scroll-mt-4" id="sec-archived">
               <button
                 onClick={() => setShowArchived(v => !v)}
-                className="flex items-center gap-2 text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 hover:text-slate-600 transition-colors"
+                className="flex items-center gap-2 text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 hover:text-slate-600 transition-colors"
               >
                 <span className={`transition-transform ${showArchived ? 'rotate-90' : ''}`}>›</span>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
@@ -1241,9 +1252,9 @@ export default function Dashboard() {
                             <h2 className="font-semibold text-slate-600 truncate text-sm">{projectLabel(project)}</h2>
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0 inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archyvas</span>
                           </div>
-                          <p className="text-xs text-slate-400 mt-0.5">{project.client}{project.name !== projectLabel(project) ? ` · ${project.name}` : ''}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{project.client}{project.name !== projectLabel(project) ? ` · ${project.name}` : ''}</p>
                         </div>
-                        <span className="text-xs text-slate-400 shrink-0">{formatDate(project.targetConstructionDate)}</span>
+                        <span className="text-xs text-slate-500 shrink-0">{formatDate(project.targetConstructionDate)}</span>
                       </div>
                     </Link>
                   ))}
@@ -1280,7 +1291,7 @@ export default function Dashboard() {
                   onChange={e => setPauseModal(m => m ? { ...m, until: e.target.value } : null)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-slate-400"
                 />
-                <p className="text-xs text-slate-400 mt-1">Primins kada patikrinti užsakovą</p>
+                <p className="text-xs text-slate-500 mt-1">Primins kada patikrinti užsakovą</p>
               </div>
             </div>
             <div className="flex gap-3 mt-6">

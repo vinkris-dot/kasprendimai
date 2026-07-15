@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="lt" style={{ colorScheme: 'light', background: '#f8fafc' }}>
       <body className="min-h-screen text-slate-900 antialiased" style={{ background: '#f8fafc' }}>
         <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-          <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
             <Link href="/" className="font-semibold text-slate-800 tracking-tight text-lg">
               KA sprendimai
             </Link>
@@ -34,7 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </header>
-        <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</main>
       </body>
     </html>
   );

@@ -120,25 +120,25 @@ export default function SavanePage() {
   return (
     <div className="max-w-4xl mx-auto py-10 px-6 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <Link href="/" className="text-sm text-slate-400 hover:text-slate-600 mb-2 inline-block">← Visi projektai</Link>
+          <Link href="/" className="text-sm text-slate-500 hover:text-slate-600 mb-2 inline-block">← Visi projektai</Link>
           <h1 className="text-2xl font-bold text-slate-900">Savaitės suvestinė</h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-slate-500 text-sm mt-1">
             {todayFormatted} — {weekEndFormatted}
           </p>
         </div>
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-            <div className={`text-2xl font-bold ${overdueStages.length > 0 ? 'text-red-600' : 'text-slate-400'}`}>{overdueStages.length}</div>
+            <div className={`text-2xl font-bold ${overdueStages.length > 0 ? 'text-red-600' : 'text-slate-500'}`}>{overdueStages.length}</div>
             <div className="text-xs text-slate-500 mt-0.5">vėluojantys</div>
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-            <div className={`text-2xl font-bold ${thisWeekStages.length > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{thisWeekStages.length}</div>
+            <div className={`text-2xl font-bold ${thisWeekStages.length > 0 ? 'text-amber-600' : 'text-slate-500'}`}>{thisWeekStages.length}</div>
             <div className="text-xs text-slate-500 mt-0.5">šią savaitę</div>
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-            <div className={`text-2xl font-bold ${urgentTasks.length > 0 ? 'text-blue-600' : 'text-slate-400'}`}>{urgentTasks.length}</div>
+            <div className={`text-2xl font-bold ${urgentTasks.length > 0 ? 'text-blue-600' : 'text-slate-500'}`}>{urgentTasks.length}</div>
             <div className="text-xs text-slate-500 mt-0.5">užduotys</div>
           </div>
         </div>
@@ -180,7 +180,7 @@ export default function SavanePage() {
                   </div>
                   <div className="text-right shrink-0 ml-4">
                     <span className="text-sm font-medium text-amber-700">{daysLeft === 0 ? 'šiandien' : `${daysLeft} d.`}</span>
-                    <div className="text-xs text-slate-400">{formatDate(endDate)}</div>
+                    <div className="text-xs text-slate-500">{formatDate(endDate)}</div>
                   </div>
                 </Link>
               );
@@ -198,18 +198,18 @@ export default function SavanePage() {
                 className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors group">
                 <AssigneeBadge id={t.assignee} />
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs text-slate-400 truncate block">{t.projectName}</span>
+                  <span className="text-xs text-slate-500 truncate block">{t.projectName}</span>
                   <span className="text-sm text-slate-700 group-hover:text-slate-900">{t.label}</span>
                 </div>
                 {t.dueDate && (
-                  <span className={`text-xs font-medium shrink-0 ${t.dueDate < TODAY.toISOString().slice(0,10) ? 'text-red-500' : 'text-slate-400'}`}>
+                  <span className={`text-xs font-medium shrink-0 ${t.dueDate < TODAY.toISOString().slice(0,10) ? 'text-red-500' : 'text-slate-500'}`}>
                     {t.dueDate === TODAY.toISOString().slice(0,10) ? 'šiandien' : t.dueDate}
                   </span>
                 )}
               </Link>
             ))}
             {urgentTasks.length > 15 && (
-              <p className="text-xs text-slate-400 text-center pt-2">+ {urgentTasks.length - 15} daugiau užduočių</p>
+              <p className="text-xs text-slate-500 text-center pt-2">+ {urgentTasks.length - 15} daugiau užduočių</p>
             )}
           </div>
         </Section>
@@ -218,7 +218,7 @@ export default function SavanePage() {
       {/* Missing docs */}
       {missingByProject.length > 0 && (
         <Section title={`📄 Laukiami dokumentai`} color="bg-slate-50 border-slate-100 text-slate-700">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {missingByProject.map(({ project, missing }) => (
               <Link key={project.id} href={`/projects/${project.id}`}
                 className="p-3 rounded-lg border border-slate-100 hover:border-amber-200 hover:bg-amber-50/50 transition-colors group">
@@ -228,7 +228,7 @@ export default function SavanePage() {
                 </div>
                 <div className="space-y-0.5">
                   {missing.slice(0, 3).map(d => (
-                    <div key={d.id} className="text-xs text-slate-400 truncate">
+                    <div key={d.id} className="text-xs text-slate-500 truncate">
                       <span className="text-slate-300 mr-1">{d.number}</span>{d.name}
                     </div>
                   ))}
@@ -242,11 +242,11 @@ export default function SavanePage() {
 
       {/* Team workload */}
       <Section title="👥 Komandos apkrova" color="bg-slate-50 border-slate-100 text-slate-700">
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="text-xs text-slate-500 mb-4">
           Apkrova = dirbamų etapų darbo valandos per savaitę (etapo sąnaudos ÷ trukmė) prieš žmogaus pajėgumą.
           Laukia = valandos, kurios atsirakins gavus trūkstamus įėjimus. Perkrauta — virš 100 % pajėgumo, daug — nuo 80 %.
         </p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => {
             const mw = workload[m.id];
             const cap = WEEKLY_CAPACITY[m.id];
@@ -280,7 +280,7 @@ export default function SavanePage() {
                   <div className={`${levelColor} h-full`} style={{ width: `${Math.min(100, (mw.workableHours / cap) * 100)}%` }} />
                   <div className="bg-slate-300 h-full" style={{ width: `${Math.max(0, Math.min(100 - (mw.workableHours / cap) * 100, (mw.blockedHours / cap) * 100))}%` }} />
                 </div>
-                <p className={`text-[11px] pl-1 ${level !== 'ok' ? `font-semibold ${levelText}` : 'text-slate-400'}`}>
+                <p className={`text-[11px] pl-1 ${level !== 'ok' ? `font-semibold ${levelText}` : 'text-slate-500'}`}>
                   {wh} val./sav. iš {cap} · {bh > 0 ? `+${bh} val. laukia · ` : ''}{levelLabel}
                   <span className="text-slate-300"> · {mw.workable}/{mw.total} etapai</span>
                 </p>
@@ -322,7 +322,7 @@ export default function SavanePage() {
         <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
           <div className="text-5xl mb-3">🎉</div>
           <h2 className="text-lg font-semibold text-slate-800">Viskas tvarkoje!</h2>
-          <p className="text-slate-400 text-sm mt-1">Šią savaitę nėra vėluojančių etapų ar skubių užduočių</p>
+          <p className="text-slate-500 text-sm mt-1">Šią savaitę nėra vėluojančių etapų ar skubių užduočių</p>
         </div>
       )}
     </div>
