@@ -91,7 +91,7 @@ export default function KlientasPage({ params }: { params: Promise<{ id: string 
   })();
 
   // Compute progress % — exclude PAKARTOTINIS (sub-stage of SLD, shouldn't inflate total)
-  const progressStageIds = activeStageIds.filter(s => s !== 'PAKARTOTINIS');
+  const progressStageIds: StageId[] = activeStageIds.filter(s => s !== 'PAKARTOTINIS');
   const minActiveIdx = Math.min(...currentStages.map(s => progressStageIds.indexOf(s as StageId)).filter(i => i >= 0));
   const inferredDone = progressStageIds.filter((sid, idx) =>
     idx < minActiveIdx || completedStages.includes(sid)
