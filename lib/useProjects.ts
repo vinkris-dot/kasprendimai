@@ -431,6 +431,37 @@ export function useProjects() {
     });
   }, []);
 
+  /** Užbaigia visus aktyvius etapus vienu veiksmu — projektas tampa „Baigtas". */
+  const finishProject = useCallback((projectId: string) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const today = new Date().toISOString().slice(0, 10);
+        const stageStatuses = { ...(p.stageStatuses ?? {}) };
+        let pakartotinisRounds = p.pakartotinisRounds ?? 0;
+        for (const sid of (p.activeStages ?? [])) {
+          stageStatuses[sid] = { ...(stageStatuses[sid] ?? {}), endDate: stageStatuses[sid]?.endDate || today } as import('./types').StageStatus;
+          if (sid === 'PAKARTOTINIS') pakartotinisRounds += 1;
+        }
+        const updatedProject: Project = {
+          ...p,
+          activeStages: [],
+          completedStages: [], // baigto projekto konvencija — kaip toggleStage baigiant paskutinį etapą
+          stageStatuses,
+          pakartotinisRounds,
+          updatedAt: new Date().toISOString(),
+        };
+        updatedProject.targetConstructionDate = calcEffectiveTargetDate(
+          updatedProject.startDate, updatedProject.selectedParts, stageStatuses, updatedProject.customParts ?? [],
+        );
+        upsertToSupabase(updatedProject).catch(() => {});
+        return updatedProject;
+      });
+      saveToLocalStorage(updated);
+      return updated;
+    });
+  }, []);
+
   const updateStageStatus = useCallback((
     projectId: string,
     stageId: StageId,
@@ -692,6 +723,7 @@ export function useProjects() {
     toggleDocument,
     updateDocumentNotes,
     toggleStage,
+    finishProject,
     updateStageStatus,
     updateMotyvuotiAtsakymai,
     updateConnectionDate,

@@ -285,7 +285,7 @@ function SoonDonut({ soon }: { soon: Alert[] }) {
 
 export default function Dashboard() {
   const router = useRouter();
-  const { projects, loaded, syncStatus, toggleStage, updateProject, toggleDocument, copyProject } = useProjects();
+  const { projects, loaded, syncStatus, toggleStage, updateProject, toggleDocument, copyProject, finishProject } = useProjects();
   const [search, setSearch] = useState('');
   const [memberFilter, setMemberFilter] = useState<TeamMemberId | null>(null);
   const [stageFilter, setStageFilter] = useState<StageId | null>(null);
@@ -302,6 +302,7 @@ export default function Dashboard() {
   const [copyConfirmId, setCopyConfirmId] = useState<string | null>(null);
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [replanConfirmId, setReplanConfirmId] = useState<string | null>(null);
+  const [finishConfirmId, setFinishConfirmId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>(() =>
     typeof window !== 'undefined' && localStorage.getItem('ka_view') === 'table' ? 'table' : 'cards'
@@ -911,6 +912,24 @@ export default function Dashboard() {
                       {project.paused ? 'Pristabdyta' : 'Pristabdyti'}
                     </button>
                     <div className="flex items-center gap-4">
+                      {finishConfirmId === project.id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">Užbaigti visus etapus?</span>
+                          <button onClick={e => { e.preventDefault(); finishProject(project.id); setFinishConfirmId(null); }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
+                          <button onClick={e => { e.preventDefault(); setFinishConfirmId(null); }} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Ne</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={e => { e.preventDefault(); setFinishConfirmId(project.id); }}
+                          className="text-xs text-emerald-600 hover:text-emerald-800 flex items-center gap-1 transition-colors"
+                          title="Užbaigti projektą: visi aktyvūs etapai pažymimi baigtais šiandien"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                          Baigti
+                        </button>
+                      )}
                       {isOverdue && (replanConfirmId === project.id ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-500">Aktyvūs etapai — nuo šiandien?</span>
