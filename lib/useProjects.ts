@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Project, StageId, SelectedParts, MotyvuotasAtsakymas, ProjektavimoUzduotis } from './types';
-import { createDefaultProject, calcTargetDate, validStageIds, DEFAULT_DOKUMENTAI, DEFAULT_PP_BYLA, DEFAULT_STAGE_ASSIGNEES } from './defaultData';
+import { createDefaultProject, calcTargetDate, calcEffectiveTargetDate, validStageIds, DEFAULT_DOKUMENTAI, DEFAULT_PP_BYLA, DEFAULT_STAGE_ASSIGNEES } from './defaultData';
 import { supabase } from './supabase';
 
 const STORAGE_KEY = 'openclaw_projects';
@@ -404,18 +404,25 @@ export function useProjects() {
             updatedAt: new Date().toISOString(),
           };
         } else {
-          // inactive → active: add to active, clear endDate
+          // inactive → active: add to active, clear endDate.
+          // Faktinė pradžia = šiandien (jei dar nesuvesta) — nuo jos skaičiuojasi
+          // efektyvus grafikas; datą galima pataisyti grafiko kortelėje.
           updatedProject = {
             ...p,
             activeStages: [...current, stage],
             completedStages: completed.filter(s => s !== stage),
             stageStatuses: {
               ...stageStatuses,
-              [stage]: { ...(stageStatuses[stage] ?? {}), endDate: '' },
+              [stage]: { ...(stageStatuses[stage] ?? {}), startDate: stageStatuses[stage]?.startDate || today, endDate: '' },
             },
             updatedAt: new Date().toISOString(),
           };
         }
+        // Statybos pradžia visada perskaičiuojama nuo faktinės eigos
+        updatedProject.targetConstructionDate = calcEffectiveTargetDate(
+          updatedProject.startDate, updatedProject.selectedParts,
+          updatedProject.stageStatuses ?? {}, updatedProject.customParts ?? [],
+        );
         upsertToSupabase(updatedProject).catch(() => {});
         return updatedProject;
       });
