@@ -5,9 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
 import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
-import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU, BylaSection, CustomPart, ManualTask } from '@/lib/types';
+import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU, BylaSection, CustomPart } from '@/lib/types';
 import { getProjectResultIds, getResultReadiness } from '@/lib/inputs';
-import { generateAutoTasks, getManualTaskItems, TaskItem } from '@/lib/tasks';
 import { PARALLEL_TDP_PARTS } from '@/lib/schedule';
 import InputsTab from '@/app/components/InputsTab';
 import { todayLT } from '@/lib/dates';
@@ -85,7 +84,6 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [addingAtsakymas, setAddingAtsakymas] = useState(false);
   const [editingAtsakymasId, setEditingAtsakymasId] = useState<string | null>(null);
   const [folderStatus, setFolderStatus] = useState<'idle' | 'creating' | 'done' | 'error'>('idle');
-  const [stageTaskForm, setStageTaskForm] = useState<{ stage: StageId; label: string; assignee: TeamMemberId | ''; due: string } | null>(null);
   const [addingKitas, setAddingKitas] = useState(false);
   const [newKitasName, setNewKitasName] = useState('');
 
@@ -174,32 +172,6 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     return result;
   })();
 
-  // Etapo užduotys — „pas ką kamuolys": auto + rankinės, priskirtos etapui
-  const stageTasksAll: TaskItem[] = [...generateAutoTasks(project), ...getManualTaskItems(project)];
-  const stageTasksFor = (sid: StageId) => stageTasksAll.filter(t => t.stage === sid);
-
-  function setTaskStatus(taskKey: string, patch: { doneAt?: string; dueDate?: string }) {
-    updateProject(project!.id, {
-      taskStatuses: { ...(project!.taskStatuses ?? {}), [taskKey]: { ...(project!.taskStatuses?.[taskKey] ?? {}), ...patch } },
-    });
-  }
-
-  function addStageTask() {
-    if (!stageTaskForm || !stageTaskForm.label.trim()) return;
-    const t: ManualTask = {
-      id: crypto.randomUUID(),
-      label: stageTaskForm.label.trim(),
-      assignee: stageTaskForm.assignee || undefined,
-      dueDate: stageTaskForm.due || undefined,
-      createdAt: new Date().toISOString(),
-      stage: stageTaskForm.stage,
-    };
-    updateProject(project!.id, {
-      manualTasks: [...(project!.manualTasks ?? []), t],
-      ...(stageTaskForm.due ? { taskStatuses: { ...(project!.taskStatuses ?? {}), [t.id]: { dueDate: stageTaskForm.due } } } : {}),
-    });
-    setStageTaskForm(null);
-  }
 
   function handleSaveNotes() {
     updateProject(project!.id, { notes: notesValue || project!.notes });
@@ -759,71 +731,86 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   </div>
                 </div>
 
-                {/* Kamuolys: kas ką daro šiame etape ir iki kada */}
-                {isCurrent && (() => {
-                  const stTasks = stageTasksFor(stage.id as StageId);
-                  const ballMembers = [...new Set(stTasks.map(t => t.assignee).filter(Boolean))] as TeamMemberId[];
-                  const ballNames = ballMembers.map(id => TEAM_MEMBERS.find(m => m.id === id)?.name ?? id).join(', ');
-                  const formOpen = stageTaskForm?.stage === stage.id;
-                  const todayStr = todayLT();
-                  return (
-                    <div className="mb-4 bg-sky-50/70 border border-sky-100 rounded-lg p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-1">
-                        <p className="text-xs font-semibold text-sky-800 uppercase tracking-wider">
-                          🏀 Kamuolys pas: <span className="normal-case">{ballNames || '— (nėra užduočių)'}</span>
-                        </p>
-                        {!formOpen && (
-                          <button
-                            onClick={() => setStageTaskForm({ stage: stage.id as StageId, label: '', assignee: '', due: '' })}
-                            className="text-xs text-sky-600 hover:text-sky-800 font-medium"
-                          >+ Užduotis</button>
-                        )}
+                {/* Etapo būsena: dirbama / laukiama sąlygų / priduota — kada ir kas */}
+                {isCurrent && !status?.endDate && (() => {
+                  const resultId = stage.id === 'PP_VIESIMAS' ? 'VIESIMAS' : stage.id;
+                  const readiness = getResultReadiness(project, resultId);
+                  const missingAll = readiness.inputs.filter(i => i.status !== 'yra');
+                  const hardMissing = missingAll.filter(i => !i.input.soft);
+                  const assignees = ((project.stageAssignees ?? {})[stage.id as StageId] ?? []) as TeamMemberId[];
+                  const names = assignees.map(id => TEAM_MEMBERS.find(m => m.id === id)?.name ?? id).join(', ');
+                  const submittalStage = ['SLD', 'PAKARTOTINIS', 'EKSPERTIZE', 'IP', 'PP_VIESIMAS'].includes(stage.id);
+                  const orderedDateOf = (docId?: string) => docId
+                    ? [...(project.dokumentai ?? []), ...(project.kitiDokumentai ?? [])].find(d => d.id === docId)?.orderedDate
+                    : undefined;
+                  const missingLines = (items: typeof missingAll, cls: string) => (
+                    <div className="space-y-0.5 mt-1">
+                      {items.map(({ input, status: st }) => {
+                        const orderedDate = orderedDateOf(input.docId);
+                        const waitingWord = input.partId
+                          ? (st === 'uzsakyta' ? 'vyksta' : 'dar nepradėtas')
+                          : input.docId
+                            ? (st === 'uzsakyta' ? `užsakyta${orderedDate ? ` ${formatDate(orderedDate)}` : ''}, laukiama` : 'neužsakyta')
+                            : (st === 'uzsakyta' ? 'laukiama' : 'negauta');
+                        return (
+                          <p key={input.id} className={cls}>
+                            • {input.label}
+                            <span className={st === 'uzsakyta' ? 'opacity-80' : 'text-red-500 font-medium'}>
+                              {' '}— {waitingWord}
+                            </span>
+                          </p>
+                        );
+                      })}
+                    </div>
+                  );
+
+                  // 1) Vyksta (yra faktinė pradžia)
+                  if (status?.startDate) {
+                    const planned = plannedDates[stage.id as StageId];
+                    const dur = planned ? new Date(planned.endDate).getTime() - new Date(planned.startDate).getTime() : 0;
+                    const forecast = dur ? new Date(new Date(status.startDate).getTime() + dur).toISOString().slice(0, 10) : null;
+                    return submittalStage ? (
+                      <div className="mb-3 text-xs bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-semibold text-indigo-700">📤 Priduota {formatDate(status.startDate)}</span>
+                          <span className="text-indigo-500">— laukiama atsakymo{forecast ? `, numatoma iki ${formatDate(forecast)}` : ''}</span>
+                          {names && <span className="text-indigo-400 ml-auto">seka: {names}</span>}
+                        </div>
                       </div>
-                      {stTasks.map(t => (
-                        <div key={t.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 border-b border-sky-100/70 last:border-0">
-                          <button
-                            onClick={() => t.checkable && setTaskStatus(t.taskKey, { doneAt: todayStr })}
-                            disabled={!t.checkable}
-                            title={t.checkable ? 'Pažymėti atlikta' : 'Laukia kitų darbų'}
-                            className={`shrink-0 w-4 h-4 rounded border-2 transition-colors ${t.checkable ? 'border-slate-300 hover:border-emerald-500 cursor-pointer bg-white' : 'border-slate-200 opacity-40 cursor-not-allowed'}`}
-                          />
-                          {(() => { const m = TEAM_MEMBERS.find(x => x.id === t.assignee); return m ? (
-                            <span className={`shrink-0 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${m.color} ${m.textColor}`}>{m.initials}</span>
-                          ) : null; })()}
-                          <span className="text-xs text-slate-700">{t.label}{t.sub && <span className="text-slate-400"> — {t.sub}</span>}</span>
-                          <div className="relative inline-flex ml-auto" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded border cursor-pointer whitespace-nowrap ${
-                              t.dueDate
-                                ? t.dueDate < todayStr ? 'border-red-200 bg-red-50 text-red-500' : 'border-sky-200 bg-white text-slate-500'
-                                : 'border-dashed border-sky-200 text-slate-400'
-                            }`}>{t.dueDate ? `iki ${t.dueDate}` : 'iki...'}</span>
-                            <input type="date" value={t.dueDate ?? ''} onChange={e => setTaskStatus(t.taskKey, { dueDate: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
-                          </div>
+                    ) : (
+                      <div className="mb-3 text-xs bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-semibold text-emerald-700">🔨 Dirbama nuo {formatDate(status.startDate)}</span>
+                          {names && <span className="text-emerald-600">— {names}</span>}
+                          {forecast && <span className="text-emerald-500 ml-auto">numatoma baigti {formatDate(forecast)}</span>}
                         </div>
-                      ))}
-                      {formOpen && stageTaskForm && (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <input
-                            autoFocus
-                            value={stageTaskForm.label}
-                            onChange={e => setStageTaskForm({ ...stageTaskForm, label: e.target.value })}
-                            onKeyDown={e => { if (e.key === 'Enter') addStageTask(); if (e.key === 'Escape') setStageTaskForm(null); }}
-                            placeholder="Užduotis..."
-                            className="flex-1 min-w-[140px] text-xs border border-sky-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-sky-400 bg-white"
-                          />
-                          <select
-                            value={stageTaskForm.assignee}
-                            onChange={e => setStageTaskForm({ ...stageTaskForm, assignee: e.target.value as TeamMemberId | '' })}
-                            className="text-xs border border-sky-200 rounded-lg px-1.5 py-1.5 focus:outline-none bg-white"
-                          >
-                            <option value="">Kas?</option>
-                            {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                          </select>
-                          <input type="date" value={stageTaskForm.due} onChange={e => setStageTaskForm({ ...stageTaskForm, due: e.target.value })} className="text-xs border border-sky-200 rounded-lg px-1.5 py-1 focus:outline-none bg-white" />
-                          <button onClick={addStageTask} disabled={!stageTaskForm.label.trim()} className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg disabled:opacity-40">Pridėti</button>
-                          <button onClick={() => setStageTaskForm(null)} className="text-xs text-slate-500 px-1">Atšaukti</button>
-                        </div>
+                        {missingAll.length > 0 && missingLines(missingAll, 'text-amber-600')}
+                      </div>
+                    );
+                  }
+
+                  // 2) Neprasidėjęs ir trūksta startą blokuojančių įėjimų — laukiama sąlygų
+                  if (hardMissing.length > 0) {
+                    return (
+                      <div className="mb-3 text-xs bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                        <p className="font-semibold text-amber-700">⏳ Laukiama sąlygų — darbas nepradėtas</p>
+                        {missingLines(missingAll, 'text-amber-600')}
+                      </div>
+                    );
+                  }
+
+                  // 3) Neprasidėjęs, startui nieko netrūksta — galima pradėti
+                  return (
+                    <div className="mb-3 text-xs bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-semibold text-sky-700">▶ Galima pradėti</span>
+                        {names && <span className="text-sky-500">({names})</span>}
+                        <span className="text-sky-400 ml-auto">pradžią pažymėk „Faktas: pradžia"</span>
+                      </div>
+                      {missingAll.length > 0 && (
+                        <p className="text-sky-500 mt-1">Užbaigimui dar reikės:</p>
                       )}
+                      {missingAll.length > 0 && missingLines(missingAll, 'text-sky-600')}
                     </div>
                   );
                 })()}
