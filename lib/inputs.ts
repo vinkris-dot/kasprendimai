@@ -97,7 +97,7 @@ function stageIsPast(project: Project, stageId: StageId): boolean {
 }
 
 /** Ar rezultatas (etapas / TDP dalis) baigtas. */
-function partCompleted(project: Project, partId: string): boolean {
+export function partCompleted(project: Project, partId: string): boolean {
   const stageId = (partId === 'VIESIMAS' ? 'PP_VIESIMAS' : partId) as StageId;
   if ((project.completedStages ?? []).includes(stageId)) return true;
   // Faktinė pabaiga = baigta, net kai completedStages išvalytas (baigto

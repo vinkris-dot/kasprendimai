@@ -588,21 +588,31 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <div className="flex gap-2 flex-wrap">
           {activeStages.map((stage, i) => {
             const isCurrent = currentStages.includes(stage.id);
-            const isPast = i < minActiveIndex || completedStages.includes(stage.id as StageId);
+            const done = i < minActiveIndex || completedStages.includes(stage.id as StageId) || stageDone(stage.id as StageId);
+            // Nepradėto etapo atrakinimo būsena tiesiai selektoriuje: ▶ galima / ⏳ laukiama
+            const info = !isCurrent && !done ? getStageProcessInfo(project, stage.id as StageId) : null;
+            const hardLeft = info?.state === 'laukiama'
+              ? info.readiness.inputs.filter(x => x.status !== 'yra' && !x.input.soft).map(x => x.input.label).join(', ')
+              : '';
             return (
               <button
                 key={stage.id}
                 onClick={() => toggleStage(project.id, stage.id as StageId)}
-                title={isCurrent ? 'Paspausti → pažymėti baigtu' : completedStages.includes(stage.id as StageId) ? 'Paspausti → pašalinti' : 'Paspausti → pradėti'}
+                title={isCurrent ? 'Paspausti → pažymėti baigtu'
+                  : done ? 'Paspausti → pašalinti'
+                  : hardLeft ? `Laukia: ${hardLeft} · paspausti → pradėti`
+                  : 'Sąlygos įvykdytos — paspausti → pradėti'}
                 className={`text-xs px-3 py-1.5 rounded-full font-medium border-2 transition-all ${
                   isCurrent
                     ? `${stage.bgClass} ${stage.textClass} ${stage.colorClass}`
-                    : isPast || stageDone(stage.id as StageId)
+                    : done
                     ? 'bg-slate-100 text-slate-400 border-slate-200'
+                    : info?.state === 'galima'
+                    ? 'bg-sky-50 text-sky-600 border-sky-200 hover:border-sky-300'
                     : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'
                 }`}
               >
-                {(isPast || stageDone(stage.id as StageId)) ? '✓ ' : ''}{stage.shortName}
+                {done ? '✓ ' : info?.state === 'galima' ? '▶ ' : info?.state === 'laukiama' ? '⏳ ' : ''}{stage.shortName}
               </button>
             );
           })}
@@ -720,6 +730,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </button>
               );
             };
+            // Statybos pradžios blokeriai: kas iš pasirinktų dar nebaigta
+            const buildBlockers = (['SLD', 'TDP', 'PAKARTOTINIS', 'EKSPERTIZE'] as StageId[])
+              .filter(sid => has(sid) && getStageProcessInfo(project, sid).state !== 'baigta')
+              .map(sid => STAGES.find(s => s.id === sid)!.shortName);
             const tdpSeqParts = (['BD', 'SP', 'SA', 'SK', 'LVN'] as PartId[]).filter(pid => selectedParts[pid]);
             const tdpParParts = (Object.keys(PARALLEL_TDP_PARTS) as PartId[]).filter(pid => selectedParts[pid]);
             const tdpReady = getResultReadiness(project, 'TDP').ready;
@@ -770,10 +784,18 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   </>)}
                   <span className="text-slate-300 text-xs">→</span>
                   <span
-                    className="text-[11px] font-semibold border border-slate-300 bg-slate-50 text-slate-700 rounded-full px-2 py-0.5 whitespace-nowrap"
-                    title="Statybai reikia: SLD gautas + TDP baigtas (+ ekspertizė, jei reikalinga)"
+                    className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 whitespace-nowrap ${
+                      buildBlockers.length === 0
+                        ? 'bg-green-100 text-green-700 border-green-300'
+                        : 'bg-slate-50 text-slate-700 border-slate-300'
+                    }`}
+                    title={buildBlockers.length === 0
+                      ? 'Visos statybai reikalingos dalys baigtos'
+                      : `Statybai dar reikia: ${buildBlockers.join(', ')}`}
                   >
-                    🏁 Statyba {formatDate(effectiveTargetDate || project.targetConstructionDate)}
+                    🏁 {buildBlockers.length === 0
+                      ? 'Statyba galima'
+                      : `Statyba ${formatDate(effectiveTargetDate || project.targetConstructionDate)}`}
                   </span>
                 </div>
                 {(tdpSeqParts.length > 0 || tdpParParts.length > 0) && (

@@ -4,8 +4,9 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
-import { PROJECT_PARTS, DEFAULT_PARTS, calcTargetDate, formatDate } from '@/lib/defaultData';
-import { SelectedParts, PartId, ProjektavimoUzduotis, DEFAULT_PU } from '@/lib/types';
+import { PROJECT_PARTS, DEFAULT_PARTS, STAGES, calcTargetDate, calcStageDates, formatDate } from '@/lib/defaultData';
+import { SelectedParts, PartId, StageId, ProjektavimoUzduotis, DEFAULT_PU } from '@/lib/types';
+import { PARALLEL_TDP_PARTS } from '@/lib/schedule';
 import { todayLT } from '@/lib/dates';
 
 function suggestProjectNumber(existingNumbers: (string | undefined)[]): string {
@@ -82,6 +83,7 @@ export default function NewProject() {
   const [pu, setPu] = useState<ProjektavimoUzduotis>({ ...DEFAULT_PU });
 
   const targetDate = useMemo(() => calcTargetDate(startDate, parts), [startDate, parts]);
+  const stageDates = useMemo(() => (startDate ? calcStageDates(startDate, parts) : {}), [startDate, parts]);
 
   function togglePart(id: PartId) {
     setParts(p => ({ ...p, [id]: !p[id] }));
@@ -646,6 +648,85 @@ export default function NewProject() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Proceso sekos planas pagal pasirinktas dalis — matosi dar prieš sukuriant */}
+        {startDate && (
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-800 mb-2">
+              Proceso seka <span className="font-normal text-slate-400">(planas)</span>
+            </h3>
+            {(() => {
+              const md = (iso?: string) => (iso ? iso.slice(5) : '');
+              const chip = (sid: StageId) => {
+                const s = STAGES.find(x => x.id === sid)!;
+                const d = stageDates[sid];
+                return (
+                  <span key={sid} title={s.name}
+                    className="text-[11px] font-medium border border-slate-200 bg-slate-50 text-slate-600 rounded-full px-2 py-0.5 whitespace-nowrap">
+                    {s.shortName}{d && <span className="font-normal text-slate-400"> {md(d.startDate)}→{md(d.endDate)}</span>}
+                  </span>
+                );
+              };
+              const partChip = (pid: PartId) => {
+                const p = PROJECT_PARTS.find(x => x.id === pid);
+                return (
+                  <span key={pid} title={p?.description}
+                    className="text-[11px] border border-slate-200 bg-slate-50 text-slate-600 rounded-full px-2 py-0.5 whitespace-nowrap">
+                    {p?.label ?? pid}
+                  </span>
+                );
+              };
+              const par = (['PP_VIESIMAS', 'IP', 'SLD', 'TDP'] as StageId[]).filter(sid => stageDates[sid]);
+              const tdpSeq = (['BD', 'SP', 'SA', 'SK', 'LVN'] as PartId[]).filter(pid => parts[pid]);
+              const tdpPar = (Object.keys(PARALLEL_TDP_PARTS) as PartId[]).filter(pid => parts[pid]);
+              return (
+                <>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {stageDates['DP'] && (<>
+                      {chip('DP')}
+                      <span className="text-[10px] text-slate-400" title="DP rengiamas lygiagrečiai su SR ir PP">∥</span>
+                    </>)}
+                    {chip('SR')}
+                    {stageDates['PP'] && (<><span className="text-slate-300 text-xs">→</span>{chip('PP')}</>)}
+                    {par.length > 0 && (<>
+                      <span className="text-slate-300 text-xs">→</span>
+                      <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
+                        <span className="text-[10px] text-slate-400" title="Atrakina baigtas PP — vyksta lygiagrečiai">po PP ∥</span>
+                        {par.map(chip)}
+                      </span>
+                    </>)}
+                    {stageDates['PAKARTOTINIS'] && (<><span className="text-slate-300 text-xs">→</span>{chip('PAKARTOTINIS')}</>)}
+                    {stageDates['EKSPERTIZE'] && (<><span className="text-slate-300 text-xs">→</span>{chip('EKSPERTIZE')}</>)}
+                    <span className="text-slate-300 text-xs">→</span>
+                    <span className="text-[11px] font-semibold border border-slate-300 bg-slate-50 text-slate-700 rounded-full px-2 py-0.5 whitespace-nowrap">
+                      🏁 Statyba{targetDate ? ` ${formatDate(targetDate)}` : ''}
+                    </span>
+                  </div>
+                  {(tdpSeq.length > 0 || tdpPar.length > 0) && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-slate-100">
+                      <span className="text-[10px] text-slate-400 font-medium">TDP dalys:</span>
+                      {tdpSeq.map((pid, idx) => (
+                        <span key={pid} className="inline-flex items-center gap-1.5">
+                          {idx > 0 && <span className="text-slate-300 text-xs">→</span>}
+                          {partChip(pid)}
+                        </span>
+                      ))}
+                      {tdpPar.length > 0 && (
+                        <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
+                          <span className="text-[10px] text-slate-400" title="LST dalys vyksta lygiagrečiai, kai baigta BD+SP+SA">∥ po BD+SP+SA</span>
+                          {tdpPar.map(partChip)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+            <p className="text-[11px] text-slate-400 mt-2">
+              PP baigimas atrakina Viešinimą, IP, SLD ir TDP; SLD pridavimui — PP + 00 + 05 + 06; ekspertizė po TDP.
+            </p>
           </div>
         )}
 

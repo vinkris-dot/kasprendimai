@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
 import { STAGES, formatDate, calcStageDates, projectLabel } from '@/lib/defaultData';
 import { Project, StageId } from '@/lib/types';
+import { isProjectFinished } from '@/lib/inputs';
 import { todayLT } from '@/lib/dates';
 
 function getActiveStageIds(project: Project): StageId[] {
@@ -35,7 +36,8 @@ export default function PrintAllPage() {
 
   if (!loaded) return null;
 
-  const active = projects.filter(p => (p.activeStages ?? ['SR']).length > 0);
+  // Spausdinami nebaigti projektai — tuščias activeStages vidury proceso ≠ baigtas
+  const active = projects.filter(p => !p.archived && !isProjectFinished(p));
 
   return (
     <div className="bg-white min-h-screen">

@@ -1,5 +1,6 @@
 import { Project, TeamMemberId } from './types';
 import { projectLabel } from './defaultData';
+import { partCompleted } from './inputs';
 import { todayLT, addDaysStr } from './dates';
 
 export interface TaskItem {
@@ -22,8 +23,10 @@ export interface TaskItem {
 export function generateAutoTasks(project: Project): TaskItem[] {
   const doc = (id: string) => project.dokumentai?.find(d => d.id === id);
   const ts = project.taskStatuses ?? {};
-  const completed = project.completedStages ?? [];
   const active = project.activeStages ?? ['SR'];
+  // Baigtumas per partCompleted (ne completedStages): faktinė pabaiga užskaitoma
+  // ir tada, kai completedStages išvalytas baigus paskutinį aktyvų etapą.
+  const ppDone = partCompleted(project, 'PP');
 
   const d00 = doc('doc-00');
   const d02 = doc('doc-02');
@@ -137,7 +140,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   }
 
   // PP completed → start SP+SA (tik kai šios dalys pasirinktos)
-  if (completed.includes('PP') && (project.selectedParts.SP || project.selectedParts.SA) && !ts['start-sp-sa']?.doneAt) {
+  if (ppDone && (project.selectedParts.SP || project.selectedParts.SA) && !ts['start-sp-sa']?.doneAt) {
     tasks.push({
       taskKey: 'start-sp-sa', stage: 'TDP', label: 'Pradėti SP+SA brėžinius',
       assignee: 'LL', checkable: true,
@@ -145,24 +148,46 @@ export function generateAutoTasks(project: Project): TaskItem[] {
     });
   }
 
-  // PP completed → start SLD coordination
-  if (completed.includes('PP') && !ts['start-sld']?.doneAt) {
+  // PP completed → priduoti SLD. Pridavimui VISADA privaloma PP + 00 + 05 + 06,
+  // todėl žymėti galima tik kai dokumentai yra; iki tol rodoma, ko laukiama.
+  if (project.selectedParts.SLD && ppDone
+      && !active.includes('SLD') && !partCompleted(project, 'SLD')
+      && !ts['start-sld']?.doneAt) {
+    const missingSld = [
+      !d00?.received && '00 įgaliojimas',
+      !d05?.received && '05 SR',
+      !d06?.received && '06 prisijungimo sąlygos',
+    ].filter(Boolean).join(', ');
     tasks.push({
-      taskKey: 'start-sld', stage: 'SLD', label: 'Pradėti SLD derinimą',
-      assignee: 'NR', checkable: true,
+      taskKey: 'start-sld', stage: 'SLD', label: 'Priduoti SLD (Infostatyba)',
+      sub: missingSld ? `laukia: ${missingSld}` : 'PP + 00 + 05 + 06 ✓',
+      assignee: 'NR', checkable: !missingSld,
       dueDate: ts['start-sld']?.dueDate, doneAt: ts['start-sld']?.doneAt, isManual: false,
     });
   }
 
   // PP completed → start TDP (TDP eina lygiagrečiai su SLD derinimu, ne po jo).
   // Kai pasirinkta SP/SA, startą dengia „Pradėti SP+SA brėžinius" — nedubliuojam.
-  if (completed.includes('PP') && project.selectedParts.TDP
+  if (ppDone && project.selectedParts.TDP
       && !(project.selectedParts.SP || project.selectedParts.SA)
+      && !active.includes('TDP') && !partCompleted(project, 'TDP')
       && !ts['start-tdp']?.doneAt) {
     tasks.push({
       taskKey: 'start-tdp', stage: 'TDP', label: 'Pradėti TDP',
       assignee: 'LL', checkable: true,
       dueDate: ts['start-tdp']?.dueDate, doneAt: ts['start-tdp']?.doneAt, isManual: false,
+    });
+  }
+
+  // TDP baigtas → atiduoti ekspertizei (SLD gautas — soft, nestabdo)
+  if (project.selectedParts.EKSPERTIZE && partCompleted(project, 'TDP')
+      && !active.includes('EKSPERTIZE') && !partCompleted(project, 'EKSPERTIZE')
+      && !ts['start-ekspertize']?.doneAt) {
+    tasks.push({
+      taskKey: 'start-ekspertize', stage: 'EKSPERTIZE', label: 'Atiduoti projektą ekspertizei',
+      sub: partCompleted(project, 'SLD') ? 'TDP baigtas ✓, SLD gautas ✓' : 'TDP baigtas ✓ (SLD dar derinamas)',
+      assignee: 'NR', checkable: true,
+      dueDate: ts['start-ekspertize']?.dueDate, doneAt: ts['start-ekspertize']?.doneAt, isManual: false,
     });
   }
 
