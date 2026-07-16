@@ -125,10 +125,20 @@ export async function POST(req: NextRequest) {
         DATA: today,
         METAI: String(new Date().getFullYear()),
         PROJ_NR: body.projectNumber || null,
+        SUTARTIES_NR: body.projectNumber || null,
         OBJEKTAS: pu.objektas || null,
         STATINYS: pu.objektas ? `${pu.objektas}, ${address}` : null,
         SKLYPO_PLOTAS: pu.sklypoPlotai || null,
         BENDR_PLOTAS: pu.bendrasPlotai || null,
+        SKLYPO_UNIK_NR: null,
+        // Įgaliojimo laukai — įgaliotinis pagal nutylėjimą M. Česnulis (direktorius)
+        IGALIOTINIS: 'Mindaugą Česnulį',
+        IGALIOTINIO_GIM: '1980-06-22',
+        STATYTOJO_KODAS: null,
+        STATYTOJO_ATSTOVAS: null,
+        STATYTOJO_ATSTOVO_VARDAS: null,
+        STATYTOJO_PAREIGOS: null,
+        STATYTOJO_ADRESAS: null,
       };
       fs.writeFileSync(duomFile, JSON.stringify(duomenys, null, 2), 'utf-8');
     }
