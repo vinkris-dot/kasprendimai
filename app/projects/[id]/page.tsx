@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
 import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
-import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU, BylaSection, CustomPart } from '@/lib/types';
+import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU, BylaSection, CustomPart, ManualTask } from '@/lib/types';
 import { getProjectResultIds, getResultReadiness } from '@/lib/inputs';
+import { generateAutoTasks, getManualTaskItems, TaskItem } from '@/lib/tasks';
+import { PARALLEL_TDP_PARTS } from '@/lib/schedule';
 import InputsTab from '@/app/components/InputsTab';
 
 const BYLA_SECTIONS: { id: string; label: string; partKey: string }[] = [
@@ -82,6 +84,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [addingAtsakymas, setAddingAtsakymas] = useState(false);
   const [editingAtsakymasId, setEditingAtsakymasId] = useState<string | null>(null);
   const [folderStatus, setFolderStatus] = useState<'idle' | 'creating' | 'done' | 'error'>('idle');
+  const [stageTaskForm, setStageTaskForm] = useState<{ stage: StageId; label: string; assignee: TeamMemberId | ''; due: string } | null>(null);
   const [addingKitas, setAddingKitas] = useState(false);
   const [newKitasName, setNewKitasName] = useState('');
 
@@ -144,7 +147,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   // All TDP sub-parts (for toggles)
   const tdpSubParts = PROJECT_PARTS.filter(p => p.group === 'tdp' && p.id !== 'TDP' && p.id !== 'EKSPERTIZE');
 
-  // Compute planned dates for each active TDP sub-part (sequential within TDP window)
+  // Compute planned dates for each active TDP sub-part:
+  // BD/SP/SA/SK/LVN — nuosekliai; LST dalys (T, VN, ŠVOK...) — lygiagrečiai po BD+SP+SA
   const tdpPlannedDates: Record<string, { startDate: string; endDate: string }> = (() => {
     const tdpStart = plannedDates['TDP']?.startDate;
     if (!tdpStart) return {};
@@ -152,13 +156,49 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     let cursor = new Date(tdpStart);
     const result: Record<string, { startDate: string; endDate: string }> = {};
+    let prefixDays = 0;
+    if (selectedParts.BD) prefixDays += 7;
+    if (selectedParts.SP) prefixDays += 7;
+    if (selectedParts.SA) prefixDays += 14;
     for (const p of tdpSubParts) {
       if (!selectedParts[p.id as PartId]) continue;
+      if (PARALLEL_TDP_PARTS[p.id as PartId] != null) {
+        const start = addDays(new Date(tdpStart), prefixDays);
+        result[p.id] = { startDate: fmt(start), endDate: fmt(addDays(start, p.durationDays)) };
+        continue;
+      }
       result[p.id] = { startDate: fmt(cursor), endDate: fmt(addDays(cursor, p.durationDays)) };
       cursor = addDays(cursor, p.durationDays);
     }
     return result;
   })();
+
+  // Etapo užduotys — „pas ką kamuolys": auto + rankinės, priskirtos etapui
+  const stageTasksAll: TaskItem[] = [...generateAutoTasks(project), ...getManualTaskItems(project)];
+  const stageTasksFor = (sid: StageId) => stageTasksAll.filter(t => t.stage === sid);
+
+  function setTaskStatus(taskKey: string, patch: { doneAt?: string; dueDate?: string }) {
+    updateProject(project!.id, {
+      taskStatuses: { ...(project!.taskStatuses ?? {}), [taskKey]: { ...(project!.taskStatuses?.[taskKey] ?? {}), ...patch } },
+    });
+  }
+
+  function addStageTask() {
+    if (!stageTaskForm || !stageTaskForm.label.trim()) return;
+    const t: ManualTask = {
+      id: crypto.randomUUID(),
+      label: stageTaskForm.label.trim(),
+      assignee: stageTaskForm.assignee || undefined,
+      dueDate: stageTaskForm.due || undefined,
+      createdAt: new Date().toISOString(),
+      stage: stageTaskForm.stage,
+    };
+    updateProject(project!.id, {
+      manualTasks: [...(project!.manualTasks ?? []), t],
+      ...(stageTaskForm.due ? { taskStatuses: { ...(project!.taskStatuses ?? {}), [t.id]: { dueDate: stageTaskForm.due } } } : {}),
+    });
+    setStageTaskForm(null);
+  }
 
   function handleSaveNotes() {
     updateProject(project!.id, { notes: notesValue || project!.notes });
@@ -718,6 +758,75 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   </div>
                 </div>
 
+                {/* Kamuolys: kas ką daro šiame etape ir iki kada */}
+                {isCurrent && (() => {
+                  const stTasks = stageTasksFor(stage.id as StageId);
+                  const ballMembers = [...new Set(stTasks.map(t => t.assignee).filter(Boolean))] as TeamMemberId[];
+                  const ballNames = ballMembers.map(id => TEAM_MEMBERS.find(m => m.id === id)?.name ?? id).join(', ');
+                  const formOpen = stageTaskForm?.stage === stage.id;
+                  const todayStr = new Date().toISOString().slice(0, 10);
+                  return (
+                    <div className="mb-4 bg-sky-50/70 border border-sky-100 rounded-lg p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-1">
+                        <p className="text-xs font-semibold text-sky-800 uppercase tracking-wider">
+                          🏀 Kamuolys pas: <span className="normal-case">{ballNames || '— (nėra užduočių)'}</span>
+                        </p>
+                        {!formOpen && (
+                          <button
+                            onClick={() => setStageTaskForm({ stage: stage.id as StageId, label: '', assignee: '', due: '' })}
+                            className="text-xs text-sky-600 hover:text-sky-800 font-medium"
+                          >+ Užduotis</button>
+                        )}
+                      </div>
+                      {stTasks.map(t => (
+                        <div key={t.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 border-b border-sky-100/70 last:border-0">
+                          <button
+                            onClick={() => t.checkable && setTaskStatus(t.taskKey, { doneAt: todayStr })}
+                            disabled={!t.checkable}
+                            title={t.checkable ? 'Pažymėti atlikta' : 'Laukia kitų darbų'}
+                            className={`shrink-0 w-4 h-4 rounded border-2 transition-colors ${t.checkable ? 'border-slate-300 hover:border-emerald-500 cursor-pointer bg-white' : 'border-slate-200 opacity-40 cursor-not-allowed'}`}
+                          />
+                          {(() => { const m = TEAM_MEMBERS.find(x => x.id === t.assignee); return m ? (
+                            <span className={`shrink-0 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${m.color} ${m.textColor}`}>{m.initials}</span>
+                          ) : null; })()}
+                          <span className="text-xs text-slate-700">{t.label}{t.sub && <span className="text-slate-400"> — {t.sub}</span>}</span>
+                          <div className="relative inline-flex ml-auto" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.()}>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border cursor-pointer whitespace-nowrap ${
+                              t.dueDate
+                                ? t.dueDate < todayStr ? 'border-red-200 bg-red-50 text-red-500' : 'border-sky-200 bg-white text-slate-500'
+                                : 'border-dashed border-sky-200 text-slate-400'
+                            }`}>{t.dueDate ? `iki ${t.dueDate}` : 'iki...'}</span>
+                            <input type="date" value={t.dueDate ?? ''} onChange={e => setTaskStatus(t.taskKey, { dueDate: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
+                          </div>
+                        </div>
+                      ))}
+                      {formOpen && stageTaskForm && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input
+                            autoFocus
+                            value={stageTaskForm.label}
+                            onChange={e => setStageTaskForm({ ...stageTaskForm, label: e.target.value })}
+                            onKeyDown={e => { if (e.key === 'Enter') addStageTask(); if (e.key === 'Escape') setStageTaskForm(null); }}
+                            placeholder="Užduotis..."
+                            className="flex-1 min-w-[140px] text-xs border border-sky-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-sky-400 bg-white"
+                          />
+                          <select
+                            value={stageTaskForm.assignee}
+                            onChange={e => setStageTaskForm({ ...stageTaskForm, assignee: e.target.value as TeamMemberId | '' })}
+                            className="text-xs border border-sky-200 rounded-lg px-1.5 py-1.5 focus:outline-none bg-white"
+                          >
+                            <option value="">Kas?</option>
+                            {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                          <input type="date" value={stageTaskForm.due} onChange={e => setStageTaskForm({ ...stageTaskForm, due: e.target.value })} className="text-xs border border-sky-200 rounded-lg px-1.5 py-1 focus:outline-none bg-white" />
+                          <button onClick={addStageTask} disabled={!stageTaskForm.label.trim()} className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg disabled:opacity-40">Pridėti</button>
+                          <button onClick={() => setStageTaskForm(null)} className="text-xs text-slate-500 px-1">Atšaukti</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Two-column layout (stacked on mobile) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Left: dates + tasks */}
@@ -829,7 +938,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                                       : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-400'
                                 }`}
                               >
-                                {p.label} <span className={active ? 'text-indigo-200' : 'text-slate-300'}>{p.durationDays / 7} sav.</span>
+                                {p.label} <span className={active ? 'text-indigo-200' : 'text-slate-300'}>{PARALLEL_TDP_PARTS[p.id as PartId] != null ? '⇄ ' : ''}{p.durationDays / 7} sav.</span>
                               </button>
                             );
                           })}

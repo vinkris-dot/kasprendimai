@@ -1,6 +1,8 @@
 export type StageId = 'DP' | 'SR' | 'PP' | 'PP_VIESIMAS' | 'IP' | 'SLD' | 'PAKARTOTINIS' | 'TDP' | 'EKSPERTIZE';
 
-export type PartId = 'DP' | 'PP' | 'VIESIMAS' | 'IP' | 'SLD' | 'TDP' | 'BD' | 'SP' | 'SA' | 'SK' | 'LVN' | 'PAKARTOTINIS' | 'EKSPERTIZE' | 'KITA';
+export type PartId = 'DP' | 'PP' | 'VIESIMAS' | 'IP' | 'SLD' | 'TDP' | 'BD' | 'SP' | 'SA' | 'SK' | 'LVN' | 'PAKARTOTINIS' | 'EKSPERTIZE' | 'KITA'
+  // TDP dalys pagal LST 1516 (lygiagrečios TDP bloke, po BD+SP+SA)
+  | 'T' | 'VN' | 'SVOK' | 'E' | 'ER' | 'GSS' | 'GS' | 'SO' | 'KS';
 
 export type TeamMemberId = 'NR' | 'KV' | 'LL' | 'EXT';
 
@@ -37,6 +39,16 @@ export interface SelectedParts {
   EKSPERTIZE: boolean;
   KITA: boolean;
   KITA_days: number; // custom duration for KITA
+  // TDP dalys pagal LST 1516 (lygiagrečios)
+  T: boolean;
+  VN: boolean;
+  SVOK: boolean;
+  E: boolean;
+  ER: boolean;
+  GSS: boolean;
+  GS: boolean;
+  SO: boolean;
+  KS: boolean;
 }
 
 export interface UploadedFile {
@@ -196,6 +208,7 @@ export interface ManualTask {
   assignee?: TeamMemberId;
   dueDate?: string; // YYYY-MM-DD
   createdAt: string;
+  stage?: StageId; // jei užduotis priklauso konkrečiam etapui (rodoma etapo kortelėje)
 }
 
 export interface Project {

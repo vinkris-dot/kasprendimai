@@ -85,6 +85,70 @@ export const PROJECT_PARTS: PartConfig[] = [
     durationDays: 28, // 4 sav.
     group: 'tdp',
   },
+  // ── TDP dalys pagal LST 1516 (lygiagrečios TDP bloke, prasideda po BD+SP+SA) ──
+  {
+    id: 'T',
+    label: 'T',
+    description: 'Technologinė dalis',
+    durationDays: 28, // 4 sav.
+    group: 'tdp',
+  },
+  {
+    id: 'VN',
+    label: 'VN',
+    description: 'Vandentiekio ir nuotekų dalis',
+    durationDays: 28, // 4 sav.
+    group: 'tdp',
+  },
+  {
+    id: 'SVOK',
+    label: 'ŠVOK',
+    description: 'Šildymo, vėdinimo ir oro kondicionavimo dalis',
+    durationDays: 28, // 4 sav.
+    group: 'tdp',
+  },
+  {
+    id: 'E',
+    label: 'E',
+    description: 'Elektrotechnikos dalis',
+    durationDays: 28, // 4 sav.
+    group: 'tdp',
+  },
+  {
+    id: 'ER',
+    label: 'ER',
+    description: 'Elektroninių ryšių (silpnų srovių) dalis',
+    durationDays: 14, // 2 sav.
+    group: 'tdp',
+  },
+  {
+    id: 'GSS',
+    label: 'GSS',
+    description: 'Gaisrinės signalizacijos dalis',
+    durationDays: 14, // 2 sav.
+    group: 'tdp',
+  },
+  {
+    id: 'GS',
+    label: 'GS',
+    description: 'Gaisrinės saugos dalis',
+    durationDays: 14, // 2 sav.
+    group: 'tdp',
+  },
+  {
+    id: 'SO',
+    label: 'SO',
+    description: 'Statybos organizavimo dalis',
+    durationDays: 7, // 1 sav.
+    group: 'tdp',
+  },
+  {
+    id: 'KS',
+    label: 'KS',
+    description: 'Skaičiuojamosios kainos dalis',
+    durationDays: 7, // 1 sav.
+    group: 'tdp',
+  },
   {
     id: 'PAKARTOTINIS',
     label: 'Pakartotinis derinimas',
@@ -125,6 +189,15 @@ export const DEFAULT_PARTS: SelectedParts = {
   EKSPERTIZE: true,
   KITA: false,
   KITA_days: 14,
+  T: false,
+  VN: false,
+  SVOK: false,
+  E: false,
+  ER: false,
+  GSS: false,
+  GS: false,
+  SO: false,
+  KS: false,
 };
 
 

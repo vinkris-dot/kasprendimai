@@ -13,6 +13,7 @@ export interface TaskItem {
   doneAt?: string;
   isManual: boolean;
   checkable: boolean;
+  stage?: import('./types').StageId; // kuriam etapui užduotis priklauso (rodoma etapo kortelėje)
 }
 
 // ─── Auto-task generation (mirrors getSmartPlan but adds assignees + stage tasks) ─────
@@ -44,7 +45,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
     const missing = [!has02 && '02 nuosavybė', !has03 && '03 sklypo ribų planas']
       .filter(Boolean).join(', ');
     tasks.push({
-      taskKey: 'get-02-03', label: 'Gauti pagrindinius dokumentus', sub: missing,
+      taskKey: 'get-02-03', stage: 'SR', label: 'Gauti pagrindinius dokumentus', sub: missing,
       assignee: 'NR', checkable: false, dueDate: ts['get-02-03']?.dueDate, doneAt: ts['get-02-03']?.doneAt,
       isManual: false,
     });
@@ -53,7 +54,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   // 2. Prepare authorization 00 (needs 02+03)
   if (!d00?.received && !ts['order-00']?.doneAt) {
     tasks.push({
-      taskKey: 'order-00', label: 'Parengti įgaliojimą (00)',
+      taskKey: 'order-00', stage: 'SR', label: 'Parengti įgaliojimą (00)',
       sub: has02 && has03 ? '02 ir 03 gauta ✓' : 'laukia 02 ir 03',
       assignee: 'NR', checkable: has02 && has03,
       dueDate: ts['order-00']?.dueDate, doneAt: ts['order-00']?.doneAt, isManual: false,
@@ -63,14 +64,14 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   // 3. Parallel document tasks
   if (!d07?.received && !ts['order-07']?.doneAt) {
     tasks.push({
-      taskKey: 'order-07', label: 'Toponuotrauka (07)',
+      taskKey: 'order-07', stage: 'SR', label: 'Toponuotrauka (07)',
       assignee: 'NR', checkable: true,
       dueDate: ts['order-07']?.dueDate, doneAt: ts['order-07']?.doneAt, isManual: false,
     });
   }
   if (!has04 && !ts['order-04']?.doneAt) {
     tasks.push({
-      taskKey: 'order-04', label: 'Teritorijų planavimo ištrauka (04)',
+      taskKey: 'order-04', stage: 'SR', label: 'Teritorijų planavimo ištrauka (04)',
       assignee: 'NR', checkable: true,
       dueDate: ts['order-04']?.dueDate, doneAt: ts['order-04']?.doneAt, isManual: false,
     });
@@ -84,7 +85,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
     ].filter(Boolean) as string[];
     if (missingConn.length > 0 && !ts['order-06']?.doneAt) {
       tasks.push({
-        taskKey: 'order-06', label: 'Prisijungimo sąlygos (06)', sub: missingConn.join(', '),
+        taskKey: 'order-06', stage: 'SR', label: 'Prisijungimo sąlygos (06)', sub: missingConn.join(', '),
         assignee: 'NR', checkable: true,
         dueDate: ts['order-06']?.dueDate, doneAt: ts['order-06']?.doneAt, isManual: false,
       });
@@ -92,7 +93,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   }
   if (!d05?.received && !ts['order-05']?.doneAt) {
     tasks.push({
-      taskKey: 'order-05', label: 'SR pažyma (05)',
+      taskKey: 'order-05', stage: 'SR', label: 'SR pažyma (05)',
       assignee: 'NR', checkable: true,
       dueDate: ts['order-05']?.dueDate, doneAt: ts['order-05']?.doneAt, isManual: false,
     });
@@ -103,7 +104,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   // When docs 01-04 received + SR active → can start PP
   if (has02 && has03 && has04 && active.includes('SR') && !ts['start-pp']?.doneAt) {
     tasks.push({
-      taskKey: 'start-pp', label: 'Pradėti PP brėžinius',
+      taskKey: 'start-pp', stage: 'SR', label: 'Pradėti PP brėžinius',
       assignee: 'KV', checkable: true,
       dueDate: ts['start-pp']?.dueDate, doneAt: ts['start-pp']?.doneAt, isManual: false,
     });
@@ -112,7 +113,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   // When docs ready + SR active → order SR+PS+territory docs
   if (has02 && has03 && active.includes('SR') && !ts['order-sr-docs']?.doneAt) {
     tasks.push({
-      taskKey: 'order-sr-docs', label: 'Užsakyti SR+PS+teritorijų planavimo dok.',
+      taskKey: 'order-sr-docs', stage: 'SR', label: 'Užsakyti SR+PS+teritorijų planavimo dok.',
       assignee: 'NR', checkable: true,
       dueDate: ts['order-sr-docs']?.dueDate, doneAt: ts['order-sr-docs']?.doneAt, isManual: false,
     });
@@ -121,14 +122,14 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   // PP aktyvus → užbaigimas: LL — brėžiniai, NR — aiškinamasis raštas ir kiti dokumentai
   if (active.includes('PP') && !ts['finish-pp-breziniai']?.doneAt) {
     tasks.push({
-      taskKey: 'finish-pp-breziniai', label: 'Užbaigti PP brėžinius',
+      taskKey: 'finish-pp-breziniai', stage: 'PP', label: 'Užbaigti PP brėžinius',
       assignee: 'LL', checkable: true,
       dueDate: ts['finish-pp-breziniai']?.dueDate, doneAt: ts['finish-pp-breziniai']?.doneAt, isManual: false,
     });
   }
   if (active.includes('PP') && !ts['pp-ar-dokumentai']?.doneAt) {
     tasks.push({
-      taskKey: 'pp-ar-dokumentai', label: 'PP aiškinamasis raštas ir kiti dokumentai',
+      taskKey: 'pp-ar-dokumentai', stage: 'PP', label: 'PP aiškinamasis raštas ir kiti dokumentai',
       assignee: 'NR', checkable: true,
       dueDate: ts['pp-ar-dokumentai']?.dueDate, doneAt: ts['pp-ar-dokumentai']?.doneAt, isManual: false,
     });
@@ -137,7 +138,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   // PP completed → start SP+SA
   if (completed.includes('PP') && !ts['start-sp-sa']?.doneAt) {
     tasks.push({
-      taskKey: 'start-sp-sa', label: 'Pradėti SP+SA brėžinius',
+      taskKey: 'start-sp-sa', stage: 'TDP', label: 'Pradėti SP+SA brėžinius',
       assignee: 'LL', checkable: true,
       dueDate: ts['start-sp-sa']?.dueDate, doneAt: ts['start-sp-sa']?.doneAt, isManual: false,
     });
@@ -146,7 +147,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   // PP completed → start SLD coordination
   if (completed.includes('PP') && !ts['start-sld']?.doneAt) {
     tasks.push({
-      taskKey: 'start-sld', label: 'Pradėti SLD derinimą',
+      taskKey: 'start-sld', stage: 'SLD', label: 'Pradėti SLD derinimą',
       assignee: 'NR', checkable: true,
       dueDate: ts['start-sld']?.dueDate, doneAt: ts['start-sld']?.doneAt, isManual: false,
     });
@@ -155,7 +156,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   // SLD completed → start TDP
   if (completed.includes('SLD') && project.selectedParts.TDP && !ts['start-tdp']?.doneAt) {
     tasks.push({
-      taskKey: 'start-tdp', label: 'Pradėti TDP',
+      taskKey: 'start-tdp', stage: 'TDP', label: 'Pradėti TDP',
       assignee: 'LL', checkable: true,
       dueDate: ts['start-tdp']?.dueDate, doneAt: ts['start-tdp']?.doneAt, isManual: false,
     });
@@ -165,7 +166,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   const unanswered = (project.motyvuotiAtsakymai ?? []).filter(m => !m.atsakyta);
   if (unanswered.length > 0 && !ts['answer-motyvuoti']?.doneAt) {
     tasks.push({
-      taskKey: 'answer-motyvuoti',
+      taskKey: 'answer-motyvuoti', stage: 'SLD',
       label: `Atsakyti savivaldybei (${unanswered.length} neatsakyta)`,
       assignee: 'NR', checkable: true,
       dueDate: ts['answer-motyvuoti']?.dueDate, doneAt: ts['answer-motyvuoti']?.doneAt, isManual: false,
@@ -200,6 +201,7 @@ export function getManualTaskItems(project: Project): TaskItem[] {
       doneAt: ts[t.id]?.doneAt,
       isManual: true,
       checkable: true,
+      stage: t.stage,
     }));
 }
 

@@ -1,4 +1,4 @@
-import { SelectedParts, CustomPart, StageId, StageStatus } from './types';
+import { SelectedParts, CustomPart, StageId, StageStatus, PartId } from './types';
 
 /**
  * GRAFIKO VARIKLIS — vienintelė vieta, kur gyvena etapų trukmės ir eiliškumas.
@@ -45,14 +45,21 @@ export function tdpSpSaPrefixDays(parts: SelectedParts): number {
   return prefix;
 }
 
-/** TDP bloko trukmė įskaitant lygiagrečias papildomas dalis (po SP/SA). */
+/** LST 1516 TDP dalys, vykstančios lygiagrečiai TDP bloke (po BD+SP+SA): trukmės dienomis. */
+export const PARALLEL_TDP_PARTS: Partial<Record<PartId, number>> = {
+  T: 28, VN: 28, SVOK: 28, E: 28, ER: 14, GSS: 14, GS: 14, SO: 7, KS: 7,
+};
+
+/** TDP bloko trukmė įskaitant lygiagrečias papildomas ir LST dalis (po SP/SA). */
 export function tdpBlockDays(parts: SelectedParts, customParts: CustomPart[] = []): number {
   let tdpDays = rawTdpDays(parts);
-  const parallelCustom = customParts.filter(c => c.parallel && c.weeks > 0);
-  if (parallelCustom.length) {
+  const parallelDur = [
+    ...customParts.filter(c => c.parallel && c.weeks > 0).map(c => c.weeks * 7),
+    ...Object.entries(PARALLEL_TDP_PARTS).filter(([id]) => parts[id as PartId]).map(([, d]) => d as number),
+  ];
+  if (parallelDur.length) {
     const prefix = tdpSpSaPrefixDays(parts);
-    const maxPar = Math.max(...parallelCustom.map(c => c.weeks * 7));
-    tdpDays = Math.max(tdpDays, prefix + maxPar);
+    tdpDays = Math.max(tdpDays, prefix + Math.max(...parallelDur));
   }
   return tdpDays;
 }

@@ -31,6 +31,7 @@ const saugusVardas = (s: string) => beLietuvisku(s).replace(/[/\\:*?"<>|]/g, '_'
 // 01 (PPP) ir 02 (PP) paliekami visada.
 const PART_PREFIX: Record<string, string> = {
   BD: '03_', SP: '04_', SA: '05_', SK: '06_', LVN: '08_',
+  T: '07_', VN: '08_', SVOK: '09_', E: '10_', ER: '11_', GSS: '12_', GS: '13_', SO: '14_', KS: '15_',
 };
 // Papildomų (custom) dalių pavadinimo atpažinimas → aplanko prefiksas
 const CUSTOM_RULES: [RegExp, string][] = [
