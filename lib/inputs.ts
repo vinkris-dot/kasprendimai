@@ -73,12 +73,13 @@ export const DEFAULT_RESULT_INPUTS: Record<string, ResultInput[]> = {
   ],
 };
 
-export const INPUT_KIND_META: Record<ResultInput['kind'], { icon: string; label: string }> = {
-  dokumentas: { icon: '📄', label: 'dokumentas' },
-  skambutis: { icon: '📞', label: 'skambutis' },
-  brezinys: { icon: '📐', label: 'brėžinys' },
-  info: { icon: '💬', label: 'info iš užsakovo' },
-  kita: { icon: '📌', label: 'kita' },
+// Be piktogramų — rūšis rodoma tekstu (Kristinos pageidavimas 2026-07-17)
+export const INPUT_KIND_META: Record<ResultInput['kind'], { label: string; short: string }> = {
+  dokumentas: { label: 'dokumentas', short: 'dok.' },
+  skambutis: { label: 'skambutis', short: 'skamb.' },
+  brezinys: { label: 'brėžinys', short: 'brėž.' },
+  info: { label: 'info iš užsakovo', short: 'info' },
+  kita: { label: 'kita', short: 'kita' },
 };
 
 const PART_DONE_LABELS: Record<string, string> = {
@@ -86,7 +87,8 @@ const PART_DONE_LABELS: Record<string, string> = {
   SP: 'Sklypo planas (SP) baigtas',
   SK: 'Konstrukcijos (SK) baigtos',
   LVN: 'LVN baigta',
-  E: 'Elektra (E) baigta',
+  E: 'Lauko elektra (E) baigta',
+  EV: 'Vidaus elektra (EV) baigta',
   SVOK: 'ŠVOK baigta',
 };
 
@@ -108,12 +110,12 @@ function dynamicTdpInputs(project: Project, resultId: string): ResultInput[] | n
     : sp.SA ? [partIn('SA')]
     : [{ id: `in-${resultId.toLowerCase()}-pp`, label: 'PP baigtas', kind: 'brezinys' as const, partId: 'PP' }]);
   if (resultId === 'SVOK') return par1OrEarlier();
-  if (['T', 'VN', 'ER', 'GSS', 'GS', 'SO', 'KS'].includes(resultId)) {
+  if (['T', 'VN', 'EV', 'ER', 'GSS', 'GS', 'SO', 'KS'].includes(resultId)) {
     return sp.SVOK ? [partIn('SVOK')] : par1OrEarlier();
   }
   if (resultId === 'BD') {
     // BD — komplektavimas pabaigoje: visos kitos pasirinktos TDP dalys baigtos
-    const all = (['SA', 'SP', 'SK', 'LVN', 'E', 'SVOK', 'T', 'VN', 'ER', 'GSS', 'GS', 'SO', 'KS'] as const)
+    const all = (['SA', 'SP', 'SK', 'LVN', 'E', 'SVOK', 'T', 'VN', 'EV', 'ER', 'GSS', 'GS', 'SO', 'KS'] as const)
       .filter(p => sp[p]);
     return all.length ? all.map(partIn)
       : [{ id: 'in-bd-pp', label: 'PP baigtas', kind: 'brezinys', partId: 'PP' }];

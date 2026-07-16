@@ -611,7 +611,7 @@ export default function Dashboard() {
                   {dayPriorities.length > 0 && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
                       <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wider mb-3">
-                        🔑 Dienos prioritetai — atrakina daugiausiai
+                        Dienos prioritetai — atrakina daugiausiai
                       </p>
                       <div className="space-y-2">
                         {dayPriorities.map((u, i) => (

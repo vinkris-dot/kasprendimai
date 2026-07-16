@@ -242,25 +242,25 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
         <div className="flex-1 overflow-y-auto px-4 py-3">
           {totalPending === 0 ? (
             <div className="text-center py-12">
-              <div className="text-3xl mb-2">✅</div>
+              <div className="text-2xl mb-2 text-green-500 font-bold">✓</div>
               <p className="text-sm text-slate-500 font-medium">Viskas atlikta!</p>
               <p className="text-xs text-slate-400 mt-1">Nėra laukiančių užduočių</p>
             </div>
           ) : (
             <>
               {reminderCount === 0 && (
-                <p className="text-xs text-slate-400 text-center py-3 mb-2 bg-slate-50 rounded-lg">🎉 Skubių priminimų nėra</p>
+                <p className="text-xs text-slate-400 text-center py-3 mb-2 bg-slate-50 rounded-lg">Skubių priminimų nėra</p>
               )}
-              <TaskGroup label="🔴 Vėluoja" color="text-red-500" tasks={groups.overdue} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
-              <TaskGroup label="🟡 Šiandien" color="text-amber-500" tasks={groups.today} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
-              <TaskGroup label="🟢 Ši savaitė" color="text-emerald-600" tasks={groups.thisWeek} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
-              <TaskGroup label="📌 Suplanuotos / be termino" color="text-slate-500" tasks={laterManual} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+              <TaskGroup label="Vėluoja" color="text-red-500" tasks={groups.overdue} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+              <TaskGroup label="Šiandien" color="text-amber-500" tasks={groups.today} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+              <TaskGroup label="Ši savaitė" color="text-emerald-600" tasks={groups.thisWeek} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+              <TaskGroup label="Suplanuotos / be termino" color="text-slate-500" tasks={laterManual} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
 
               {/* Dokumentų ruošos užduotys — suskleistos pagal projektą */}
               {autoByProject.size > 0 && (
                 <div className="mt-2 pt-3 border-t border-slate-100">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    📂 Automatinės užduotys pagal projektą
+                    Automatinės užduotys pagal projektą
                   </p>
                   <p className="text-[10px] text-slate-300 mb-2 leading-snug">
                     Iš trūkstamų dokumentų ir etapų eigos. Uždėk terminą — užduotis pakils į priminimus.

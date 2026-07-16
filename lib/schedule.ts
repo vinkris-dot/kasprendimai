@@ -38,12 +38,12 @@ export function validStageIds(sp: SelectedParts): StageId[] {
 
 /** 3 fazė — lygiagrečiai po SP: konstrukcijos, lietaus vanduo, elektra (laukas). */
 export const TDP_PAR1: PartId[] = ['SK', 'LVN', 'E'];
-/** 5 fazė — kitos dalys lygiagrečiai po ŠVOK. */
-export const TDP_PAR2: PartId[] = ['T', 'VN', 'ER', 'GSS', 'GS', 'SO', 'KS'];
+/** 5 fazė — kitos dalys (įsk. vidaus elektrą EV) lygiagrečiai po ŠVOK. */
+export const TDP_PAR2: PartId[] = ['T', 'VN', 'EV', 'ER', 'GSS', 'GS', 'SO', 'KS'];
 /** TDP dalių trukmės dienomis (šaltinis grafiko skaičiavimams). */
 export const TDP_PART_DAYS: Partial<Record<PartId, number>> = {
   SA: 14, SP: 7, SK: 42, LVN: 28, E: 28, SVOK: 28,
-  T: 28, VN: 28, ER: 14, GSS: 14, GS: 14, SO: 7, KS: 7, BD: 7,
+  T: 28, VN: 28, EV: 28, ER: 14, GSS: 14, GS: 14, SO: 7, KS: 7, BD: 7,
 };
 
 const maxOr0 = (arr: number[]) => (arr.length ? Math.max(...arr) : 0);

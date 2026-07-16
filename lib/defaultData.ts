@@ -109,8 +109,15 @@ export const PROJECT_PARTS: PartConfig[] = [
   },
   {
     id: 'E',
-    label: 'E',
-    description: 'Elektrotechnikos dalis',
+    label: 'E (laukas)',
+    description: 'Elektrotechnikos dalis — lauko tinklai (lygiagrečiai su SK, LVN)',
+    durationDays: 28, // 4 sav.
+    group: 'tdp',
+  },
+  {
+    id: 'EV',
+    label: 'E (vidus)',
+    description: 'Elektrotechnikos dalis — vidaus instaliacija (kitų dalių fazėje)',
     durationDays: 28, // 4 sav.
     group: 'tdp',
   },
@@ -193,6 +200,7 @@ export const DEFAULT_PARTS: SelectedParts = {
   VN: false,
   SVOK: false,
   E: false,
+  EV: false,
   ER: false,
   GSS: false,
   GS: false,

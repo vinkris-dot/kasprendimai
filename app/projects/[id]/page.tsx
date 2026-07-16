@@ -32,11 +32,10 @@ const GROUP_LABELS: Record<string, string> = {
 
 type Tab = 'grafikas' | 'iejimai' | 'pp' | 'dokumentai' | 'motyvuoti' | 'pastabos' | 'pu' | 'bylos';
 
-const CATEGORY_ICONS: Record<string, string> = {
-  'I. Tekstinė ir dokumentų dalis': '📄',
-  'II. Sklypo plano sprendiniai': '🗺️',
-  'III. Architektūriniai sprendiniai': '🏛️',
-};
+const PaperclipIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block align-middle"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+);
+
 
 /** Determine which stages to show based on selected project parts */
 function getActiveStages(selectedParts: import('@/lib/types').SelectedParts) {
@@ -543,7 +542,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              {folderStatus === 'creating' ? '⏳ Kuriama...' :
+              {folderStatus === 'creating' ? 'Kuriama…' :
                folderStatus === 'done' ? '✓ Aplankas sukurtas' :
                folderStatus === 'error' ? '↺ Bandyti vėl' :
                'Sukurti aplanką'}
@@ -579,7 +578,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           {activeStages.map((stage, i) => {
             const isCurrent = currentStages.includes(stage.id);
             const done = i < minActiveIndex || completedStages.includes(stage.id as StageId) || stageDone(stage.id as StageId);
-            // Nepradėto etapo atrakinimo būsena tiesiai selektoriuje: ▶ galima / ⏳ laukiama
+            // Nepradėto etapo atrakinimo būsena tiesiai selektoriuje: spalva + tooltip
             const info = !isCurrent && !done ? getStageProcessInfo(project, stage.id as StageId) : null;
             const hardLeft = info?.state === 'laukiama'
               ? info.readiness.inputs.filter(x => x.status !== 'yra' && !x.input.soft).map(x => x.input.label).join(', ')
@@ -602,7 +601,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'
                 }`}
               >
-                {done ? '✓ ' : info?.state === 'galima' ? '▶ ' : info?.state === 'laukiama' ? '⏳ ' : ''}{stage.shortName}
+                {done ? '✓ ' : ''}{stage.shortName}
               </button>
             );
           })}
@@ -689,8 +688,13 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               galima: 'bg-sky-100 text-sky-700 border-sky-200',
               laukiama: 'bg-amber-50 text-amber-600 border-amber-200',
             };
+            // Be piktogramų: būseną rodo chip'o spalva (+ ✓ baigtiems); legenda — taškais
             const STATE_ICON: Record<StageProcess, string> = {
-              baigta: '✓', dirbama: '🔨', priduota: '📤', galima: '▶', laukiama: '⏳',
+              baigta: '✓ ', dirbama: '', priduota: '', galima: '', laukiama: '',
+            };
+            const STATE_DOT: Record<StageProcess, string> = {
+              baigta: 'bg-green-500', dirbama: 'bg-emerald-500', priduota: 'bg-indigo-400',
+              galima: 'bg-sky-400', laukiama: 'bg-amber-400',
             };
             // Trumpas užrakto paaiškinimas: „po PP · dok. 00,05,06"
             const shortLock = (r: ResultReadiness) => {
@@ -715,7 +719,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   title={lock ? `${s.name} — laukia: ${lock}` : s.name}
                   className={`text-[11px] font-medium border rounded-full px-2 py-0.5 whitespace-nowrap transition-opacity hover:opacity-75 ${STATE_CHIP[info.state]}`}
                 >
-                  {STATE_ICON[info.state]} {s.shortName}
+                  {STATE_ICON[info.state]}{s.shortName}
                   {lock && <span className="font-normal opacity-75"> · {lock}</span>}
                 </button>
               );
@@ -740,7 +744,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 : getResultReadiness(project, pid).ready ? 'galima' : 'laukiama';
               return (
                 <span key={pid} title={part?.description} className={`text-[11px] border rounded-full px-2 py-0.5 whitespace-nowrap ${STATE_CHIP[state]}`}>
-                  {STATE_ICON[state]} {part?.label ?? pid}
+                  {STATE_ICON[state]}{part?.label ?? pid}
                 </span>
               );
             };
@@ -748,7 +752,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               <div className="bg-white rounded-xl border border-slate-200 p-4">
                 <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
                   <h3 className="text-sm font-semibold text-slate-800">Proceso seka</h3>
-                  <span className="text-[10px] text-slate-400">✓ baigta · 🔨 dirbama · 📤 priduota · ▶ galima pradėti · ⏳ laukiama</span>
+                  <span className="text-[10px] text-slate-400 inline-flex items-center gap-2 flex-wrap">
+                    {(['baigta', 'dirbama', 'priduota', 'galima', 'laukiama'] as StageProcess[]).map(st => (
+                      <span key={st} className="inline-flex items-center gap-1">
+                        <span className={`w-1.5 h-1.5 rounded-full ${STATE_DOT[st]}`} />
+                        {st === 'galima' ? 'galima pradėti' : st}
+                      </span>
+                    ))}
+                  </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {has('DP') && (<>
@@ -786,7 +797,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       ? 'Visos statybai reikalingos dalys baigtos'
                       : `Statybai dar reikia: ${buildBlockers.join(', ')}`}
                   >
-                    🏁 {buildBlockers.length === 0
+                    {buildBlockers.length === 0
                       ? 'Statyba galima'
                       : `Statyba ${formatDate(effectiveTargetDate || project.targetConstructionDate)}`}
                   </span>
@@ -936,7 +947,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     return submittalStage ? (
                       <div className="mb-3 text-xs bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className="font-semibold text-indigo-700">📤 Priduota {formatDate(status.startDate)}</span>
+                          <span className="font-semibold text-indigo-700">Priduota {formatDate(status.startDate)}</span>
                           <span className="text-indigo-500">— laukiama atsakymo{forecast ? `, numatoma iki ${formatDate(forecast)}` : ''}</span>
                           {names && <span className="text-indigo-400 ml-auto">seka: {names}</span>}
                         </div>
@@ -944,7 +955,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     ) : (
                       <div className="mb-3 text-xs bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className="font-semibold text-emerald-700">🔨 Dirbama nuo {formatDate(status.startDate)}</span>
+                          <span className="font-semibold text-emerald-700">Dirbama nuo {formatDate(status.startDate)}</span>
                           {names && <span className="text-emerald-600">— {names}</span>}
                           {forecast && <span className="text-emerald-500 ml-auto">numatoma baigti {formatDate(forecast)}</span>}
                         </div>
@@ -957,7 +968,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   if (hardMissing.length > 0) {
                     return (
                       <div className="mb-3 text-xs bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                        <p className="font-semibold text-amber-700">⏳ Laukiama sąlygų — darbas nepradėtas</p>
+                        <p className="font-semibold text-amber-700">Laukiama sąlygų — darbas nepradėtas</p>
                         {missingLines(missingAll, 'text-amber-600')}
                       </div>
                     );
@@ -967,7 +978,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   return (
                     <div className="mb-3 text-xs bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="font-semibold text-sky-700">▶ Galima pradėti</span>
+                        <span className="font-semibold text-sky-700">Galima pradėti</span>
                         {names && <span className="text-sky-500">({names})</span>}
                         <span className="text-sky-400 ml-auto">pradžią pažymėk „Faktas: pradžia"</span>
                       </div>
@@ -984,7 +995,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   if (procInfo.state === 'galima') {
                     return (
                       <div className="mb-3 text-xs bg-sky-50 border border-sky-100 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="font-semibold text-sky-700">▶ Sąlygos startui įvykdytos</span>
+                        <span className="font-semibold text-sky-700">Sąlygos startui įvykdytos</span>
                         <button
                           onClick={() => toggleStage(project.id, stage.id as StageId)}
                           className="ml-auto text-[11px] font-semibold bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-2.5 py-1 transition-colors"
@@ -998,7 +1009,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   if (procInfo.state !== 'laukiama' || hard.length === 0) return null;
                   return (
                     <div className="mb-3 text-xs bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-slate-500">
-                      <span className="font-semibold">🔒 Atrakins:</span>{' '}
+                      <span className="font-semibold">Atrakins:</span>{' '}
                       {hard.map(({ input, status: st }) => `${input.label}${st === 'uzsakyta' ? ' (užsakyta)' : ''}`).join(' · ')}
                     </div>
                   );
@@ -1276,7 +1287,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       {tab === 'pp' && (
         <div>
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-5 text-xs text-slate-600">
-            <strong>📁 FAILAS Nr. 1 – PP BYLA</strong> (Adresas_PP_projektiniai_pasiulymai.pdf)<br />
+            <strong>FAILAS Nr. 1 – PP BYLA</strong> (Adresas_PP_projektiniai_pasiulymai.pdf)<br />
             Techninė ir architektūrinė projekto dalis. Teikiama <strong>atskirai</strong> nuo dokumentų failo.
           </div>
 
@@ -1287,7 +1298,6 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               return (
                 <div key={category}>
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-base">{CATEGORY_ICONS[category] ?? '📋'}</span>
                     <h3 className="font-semibold text-sm text-slate-700">{category}</h3>
                     <span className="text-xs text-slate-400 ml-auto">{categoryDone}/{items.length}</span>
                   </div>
@@ -1315,7 +1325,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               uploadFile(f, item.subfolder ?? '01_PP/01_PP_BYLA/01_DOKUMENTAI', item.label, uf => addChecklistFile(project.id, item.id, uf), () => alert('Klaida įkeliant failą'));
                               e.target.value = '';
                             }} />
-                            📎
+                            <PaperclipIcon />
                           </label>
                         </div>
                         {(item.files ?? []).length > 0 && (
@@ -1347,7 +1357,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       {tab === 'dokumentai' && (
         <div>
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-5 text-xs text-slate-600">
-            <strong>📜 FAILAS Nr. 2 – DOKUMENTAI</strong> (Adresas_PP_dokumentai.pdf)<br />
+            <strong>FAILAS Nr. 2 – DOKUMENTAI</strong> (Adresas_PP_dokumentai.pdf)<br />
             Teikiami <strong>atskirame</strong> faile nuo PP bylos.
           </div>
 
@@ -1380,7 +1390,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           uploadFile(f, doc.subfolder ?? 'DOKUMENTAI', `${doc.number}_${doc.name}`, uf => addDocumentFile(project.id, doc.id, uf), () => alert('Klaida įkeliant failą'));
                           e.target.value = '';
                         }} />
-                        📎
+                        <PaperclipIcon />
                       </label>
                     </div>
                     {(doc.files ?? []).length > 0 && (
@@ -1447,7 +1457,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         onClick={() => { setEditingNote(doc.id); setNoteText(doc.notes); }}
                         className="mt-1.5 ml-7 text-xs text-slate-400 hover:text-slate-600"
                       >
-                        {doc.notes ? `📝 ${doc.notes}` : '+ Pastaba'}
+                        {doc.notes ? doc.notes : '+ Pastaba'}
                       </button>
                     )}
                   </div>
@@ -1473,7 +1483,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                             uploadFile(f, 'DOKUMENTAI/KITI', doc.name, uf => addKitasDokFile(project.id, doc.id, uf), () => alert('Klaida įkeliant failą'));
                             e.target.value = '';
                           }} />
-                          📎
+                          <PaperclipIcon />
                         </label>
                         <button onClick={() => removeKitasDok(project.id, doc.id)} className="text-slate-300 hover:text-red-400 flex-shrink-0 text-base leading-none">×</button>
                       </div>
@@ -1745,7 +1755,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       {tab === 'bylos' && (
         <div>
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-5 text-xs text-slate-600">
-            <strong>📁 Suderinti ir gauti dokumentai</strong> — sukelkite galutinius projektų failus. Kol visi skyriai neužbaigti, projektas rodomas kaip nebaigtas.
+            <strong>Suderinti ir gauti dokumentai</strong> — sukelkite galutinius projektų failus. Kol visi skyriai neužbaigti, projektas rodomas kaip nebaigtas.
           </div>
 
           {!isBylosComplete && (
@@ -1781,7 +1791,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         });
                         e.target.value = '';
                       }} />
-                      📎
+                      <PaperclipIcon />
                     </label>
                   </div>
                   {byla.files.length > 0 && (
@@ -1813,7 +1823,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         });
                         e.target.value = '';
                       }} />
-                      📎
+                      <PaperclipIcon />
                     </label>
                   </div>
                   {byla.files.length > 0 && (

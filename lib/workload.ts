@@ -37,7 +37,7 @@ const STAGE_DURATION_DAYS: Partial<Record<StageId, number>> = {
 
 // LST dalys (T, VN, ŠVOK, E, ER, GSS, GS, SO, KS) kol kas be valandų įverčių —
 // dažniausiai perkamos iš išorės (EXT); pridėti į STAGE_EFFORT, kai Kristina įvardins.
-const TDP_SUB_PARTS = ['BD', 'SP', 'SA', 'SK', 'LVN', 'T', 'VN', 'SVOK', 'E', 'ER', 'GSS', 'GS', 'SO', 'KS'] as const;
+const TDP_SUB_PARTS = ['BD', 'SP', 'SA', 'SK', 'LVN', 'T', 'VN', 'SVOK', 'E', 'EV', 'ER', 'GSS', 'GS', 'SO', 'KS'] as const;
 
 /** Etapo savaitinė apkrova žmogui: darbo valandos / etapo trukmė savaitėmis. */
 function stageWeeklyHours(p: Project, stageId: StageId, member: TeamMemberId): number {

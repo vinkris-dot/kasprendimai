@@ -48,7 +48,7 @@ export default function AssistantPanel({ projects, updateProject, toggleStage, f
         return `${name} — užduotis: „${a.input.label}" (${who}${a.input.due_date ? `, iki ${a.input.due_date}` : ''})`;
       }
       case 'add_note': return `${name} — pastaba: „${a.input.text}"`;
-      case 'set_document': return `${name} — dokumentas ${a.input.doc_number}: ${a.input.status === 'gauta' ? 'gautas ✓' : 'užsakytas ⏳'}`;
+      case 'set_document': return `${name} — dokumentas ${a.input.doc_number}: ${a.input.status === 'gauta' ? 'gautas ✓' : 'užsakytas…'}`;
       case 'archive_project': return `${name} — ARCHYVUOTI`;
       default: return `${name} — ${a.tool}`;
     }
@@ -155,7 +155,7 @@ export default function AssistantPanel({ projects, updateProject, toggleStage, f
         className="flex items-center gap-2 text-sm font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-700 transition-colors"
       >
         <span className={`transition-transform inline-block ${open ? 'rotate-90' : ''}`}>›</span>
-        🤖 AI asistentas
+        AI asistentas
       </button>
 
       {open && (

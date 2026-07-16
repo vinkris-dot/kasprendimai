@@ -10,7 +10,7 @@ const base: SelectedParts = {
   DP: false, DP_days: 84, PP: true, VIESIMAS: false, IP: false, SLD: true, TDP: true,
   BD: false, SP: true, SA: true, SK: false, LVN: false, PAKARTOTINIS: false, EKSPERTIZE: false,
   KITA: false, KITA_days: 14,
-  T: false, VN: false, SVOK: false, E: false, ER: false, GSS: false, GS: false, SO: false, KS: false,
+  T: false, VN: false, SVOK: false, E: false, EV: false, ER: false, GSS: false, GS: false, SO: false, KS: false,
 };
 const start = '2026-01-01';
 

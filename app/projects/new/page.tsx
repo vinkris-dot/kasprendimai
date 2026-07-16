@@ -706,7 +706,7 @@ export default function NewProject() {
                     {stageDates['EKSPERTIZE'] && (<><span className="text-slate-300 text-xs">→</span>{chip('EKSPERTIZE')}</>)}
                     <span className="text-slate-300 text-xs">→</span>
                     <span className="text-[11px] font-semibold border border-slate-300 bg-slate-50 text-slate-700 rounded-full px-2 py-0.5 whitespace-nowrap">
-                      🏁 Statyba{targetDate ? ` ${formatDate(targetDate)}` : ''}
+                      Statyba{targetDate ? ` ${formatDate(targetDate)}` : ''}
                     </span>
                   </div>
                   {anyTdpParts && (

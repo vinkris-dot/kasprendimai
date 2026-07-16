@@ -55,7 +55,7 @@ export function useNotifications(projects: Project[], loaded: boolean) {
       if (overdueStages > 0) parts.push(`${overdueStages} vėluojant${overdueStages === 1 ? 'is etapas' : 'ys etapai'}`);
       if (overdueTasks > 0) parts.push(`${overdueTasks} vėluojant${overdueTasks === 1 ? 'i užduotis' : 'ios užduotys'}`);
 
-      new Notification('KA sprendimai ⚠️', {
+      new Notification('KA sprendimai', {
         body: parts.join(', '),
         icon: '/favicon.ico',
         tag: 'ka-overdue',

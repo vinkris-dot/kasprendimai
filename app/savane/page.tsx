@@ -146,7 +146,7 @@ export default function SavanePage() {
 
       {/* Overdue */}
       {overdueStages.length > 0 && (
-        <Section title={`🔴 Vėluojantys etapai (${overdueStages.length})`} color="bg-red-50 border-red-100 text-red-800" defaultOpen={overdueStages.length <= 5}>
+        <Section title={`Vėluojantys etapai (${overdueStages.length})`} color="bg-red-50 border-red-100 text-red-800" defaultOpen={overdueStages.length <= 5}>
           <div className="space-y-2">
             {overdueStages.map(({ project, stageId, daysLate }) => {
               const stage = STAGES.find(s => s.id === stageId);
@@ -167,7 +167,7 @@ export default function SavanePage() {
 
       {/* This week stages */}
       {thisWeekStages.length > 0 && (
-        <Section title={`🟡 Šią savaitę baigiasi (${thisWeekStages.length})`} color="bg-amber-50 border-amber-100 text-amber-800">
+        <Section title={`Šią savaitę baigiasi (${thisWeekStages.length})`} color="bg-amber-50 border-amber-100 text-amber-800">
           <div className="space-y-2">
             {thisWeekStages.map(({ project, stageId, endDate, daysLeft }) => {
               const stage = STAGES.find(s => s.id === stageId);
@@ -191,7 +191,7 @@ export default function SavanePage() {
 
       {/* Tasks */}
       {urgentTasks.length > 0 && (
-        <Section title={`📋 Užduotys šią savaitę (${urgentTasks.length})`} color="bg-blue-50 border-blue-100 text-blue-800">
+        <Section title={`Užduotys šią savaitę (${urgentTasks.length})`} color="bg-blue-50 border-blue-100 text-blue-800">
           <div className="space-y-1.5">
             {urgentTasks.slice(0, 15).map(t => (
               <Link key={t.key} href={`/projects/${t.projectId}`}
@@ -217,7 +217,7 @@ export default function SavanePage() {
 
       {/* Missing docs */}
       {missingByProject.length > 0 && (
-        <Section title={`📄 Laukiami dokumentai`} color="bg-slate-50 border-slate-100 text-slate-700">
+        <Section title={`Laukiami dokumentai`} color="bg-slate-50 border-slate-100 text-slate-700">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {missingByProject.map(({ project, missing }) => (
               <Link key={project.id} href={`/projects/${project.id}`}
@@ -241,7 +241,7 @@ export default function SavanePage() {
       )}
 
       {/* Team workload */}
-      <Section title="👥 Komandos apkrova" color="bg-slate-50 border-slate-100 text-slate-700">
+      <Section title="Komandos apkrova" color="bg-slate-50 border-slate-100 text-slate-700">
         <p className="text-xs text-slate-500 mb-4">
           Apkrova = dirbamų etapų darbo valandos per savaitę (etapo sąnaudos ÷ trukmė) prieš žmogaus pajėgumą.
           Laukia = valandos, kurios atsirakins gavus trūkstamus įėjimus. Perkrauta — virš 100 % pajėgumo, daug — nuo 80 %.
@@ -301,7 +301,7 @@ export default function SavanePage() {
                                 title={a.blocked ? `Laukia — trūksta ${a.missing} įėjim${a.missing === 1 ? 'o' : 'ų'}` : 'Galima dirbti'}
                                 className={`text-[9px] font-semibold px-1.5 py-0 rounded-full ${s.bgClass} ${s.textClass} ${a.blocked ? 'opacity-40' : ''}`}
                               >
-                                {s.shortName}{a.blocked ? ' ⏳' : ''}
+                                {s.shortName}{a.blocked ? ' (laukia)' : ''}
                               </span>
                             );
                           })}
@@ -320,7 +320,7 @@ export default function SavanePage() {
       {/* All good */}
       {overdueStages.length === 0 && thisWeekStages.length === 0 && urgentTasks.length === 0 && (
         <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
-          <div className="text-5xl mb-3">🎉</div>
+          <div className="text-3xl mb-3 text-green-500 font-bold">✓</div>
           <h2 className="text-lg font-semibold text-slate-800">Viskas tvarkoje!</h2>
           <p className="text-slate-500 text-sm mt-1">Šią savaitę nėra vėluojančių etapų ar skubių užduočių</p>
         </div>

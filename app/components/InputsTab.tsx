@@ -11,7 +11,7 @@ import {
 
 const STATUS_META: Record<InputStatus, { icon: string; label: string; chip: string }> = {
   yra: { icon: '✓', label: 'yra', chip: 'bg-green-100 text-green-700 border-green-200' },
-  uzsakyta: { icon: '⏳', label: 'užsakyta', chip: 'bg-amber-100 text-amber-700 border-amber-200' },
+  uzsakyta: { icon: '…', label: 'užsakyta', chip: 'bg-amber-100 text-amber-700 border-amber-200' },
   nera: { icon: '✗', label: 'nėra', chip: 'bg-slate-100 text-slate-500 border-slate-200' },
 };
 
@@ -91,8 +91,8 @@ export default function InputsTab({ project, updateProject, onOpenTab }: Props) 
   return (
     <div className="space-y-4">
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
-        <strong>🔑 Ko man reikia, kad galėčiau padaryti X</strong><br />
-        Kiekvienas rezultatas turi įėjimų sąrašą. Spauskite būseną (✗ → ⏳ → ✓); dokumentų būsena
+        <strong>Ko man reikia, kad galėčiau padaryti X</strong><br />
+        Kiekvienas rezultatas turi įėjimų sąrašą. Spauskite būseną (nėra → užsakyta → yra); dokumentų būsena
         sinchronizuojasi su Dokumentai kortele, etapų — su grafiku.
       </div>
 
@@ -102,7 +102,6 @@ export default function InputsTab({ project, updateProject, onOpenTab }: Props) 
           <div className="space-y-1.5">
             {priorities.map(p => (
               <div key={p.input.id} className="flex items-center gap-2 text-sm text-amber-900">
-                <span>{INPUT_KIND_META[p.input.kind].icon}</span>
                 <span className="font-medium">{p.input.label}</span>
                 <span className="text-xs text-amber-700">
                   atrakina {p.unlocks.length}: {p.unlocks.map(resultLabel).map(l => l.split(' — ')[0]).join(', ')}
@@ -145,8 +144,8 @@ export default function InputsTab({ project, updateProject, onOpenTab }: Props) 
                     >
                       {meta.icon} {meta.label}
                     </button>
-                    <span className="text-sm flex-shrink-0" title={INPUT_KIND_META[input.kind].label}>
-                      {INPUT_KIND_META[input.kind].icon}
+                    <span className="text-[10px] text-slate-400 flex-shrink-0 w-11" title={INPUT_KIND_META[input.kind].label}>
+                      {INPUT_KIND_META[input.kind].short}
                     </span>
                     <span className={`text-sm flex-1 ${status === 'yra' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
                       {input.label}
@@ -191,7 +190,7 @@ export default function InputsTab({ project, updateProject, onOpenTab }: Props) 
                     className="text-sm border border-slate-200 rounded-lg px-2 py-1.5"
                   >
                     {(Object.keys(INPUT_KIND_META) as InputKind[]).map(k => (
-                      <option key={k} value={k}>{INPUT_KIND_META[k].icon} {INPUT_KIND_META[k].label}</option>
+                      <option key={k} value={k}>{INPUT_KIND_META[k].label}</option>
                     ))}
                   </select>
                   <button onClick={() => addInput(resultId)} className="text-xs bg-slate-900 text-white px-2.5 py-1.5 rounded">Pridėti</button>
