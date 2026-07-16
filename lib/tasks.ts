@@ -139,10 +139,10 @@ export function generateAutoTasks(project: Project): TaskItem[] {
     });
   }
 
-  // PP completed → start SP+SA (tik kai šios dalys pasirinktos)
+  // PP completed → TDP startas nuo SA (architektūra pirma, po jos SP)
   if (ppDone && (project.selectedParts.SP || project.selectedParts.SA) && !ts['start-sp-sa']?.doneAt) {
     tasks.push({
-      taskKey: 'start-sp-sa', stage: 'TDP', label: 'Pradėti SP+SA brėžinius',
+      taskKey: 'start-sp-sa', stage: 'TDP', label: 'Pradėti SA brėžinius (TDP startas)',
       assignee: 'LL', checkable: true,
       dueDate: ts['start-sp-sa']?.dueDate, doneAt: ts['start-sp-sa']?.doneAt, isManual: false,
     });

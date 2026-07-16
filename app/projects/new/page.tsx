@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
 import { PROJECT_PARTS, DEFAULT_PARTS, STAGES, calcTargetDate, calcStageDates, formatDate } from '@/lib/defaultData';
 import { SelectedParts, PartId, StageId, ProjektavimoUzduotis, DEFAULT_PU } from '@/lib/types';
-import { PARALLEL_TDP_PARTS } from '@/lib/schedule';
+import { TDP_PAR1, TDP_PAR2 } from '@/lib/schedule';
 import { todayLT } from '@/lib/dates';
 
 function suggestProjectNumber(existingNumbers: (string | undefined)[]): string {
@@ -679,8 +679,13 @@ export default function NewProject() {
                 );
               };
               const par = (['PP_VIESIMAS', 'IP', 'SLD', 'TDP'] as StageId[]).filter(sid => stageDates[sid]);
-              const tdpSeq = (['BD', 'SP', 'SA', 'SK', 'LVN'] as PartId[]).filter(pid => parts[pid]);
-              const tdpPar = (Object.keys(PARALLEL_TDP_PARTS) as PartId[]).filter(pid => parts[pid]);
+              // TDP fazės: SA → SP → ∥(SK, LVN, E) → ŠVOK → ∥(kitos) → BD pabaigoje
+              const tdpPhase12 = (['SA', 'SP'] as PartId[]).filter(pid => parts[pid]);
+              const tdpPar1Sel = TDP_PAR1.filter(pid => parts[pid]);
+              const tdpPar2Sel = TDP_PAR2.filter(pid => parts[pid]);
+              const hasSvok = !!parts.SVOK;
+              const hasBd = !!parts.BD;
+              const anyTdpParts = tdpPhase12.length + tdpPar1Sel.length + tdpPar2Sel.length > 0 || hasSvok || hasBd;
               return (
                 <>
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -704,21 +709,37 @@ export default function NewProject() {
                       🏁 Statyba{targetDate ? ` ${formatDate(targetDate)}` : ''}
                     </span>
                   </div>
-                  {(tdpSeq.length > 0 || tdpPar.length > 0) && (
+                  {anyTdpParts && (
                     <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-slate-100">
                       <span className="text-[10px] text-slate-400 font-medium">TDP dalys:</span>
-                      {tdpSeq.map((pid, idx) => (
+                      {tdpPhase12.map((pid, idx) => (
                         <span key={pid} className="inline-flex items-center gap-1.5">
                           {idx > 0 && <span className="text-slate-300 text-xs">→</span>}
                           {partChip(pid)}
                         </span>
                       ))}
-                      {tdpPar.length > 0 && (
+                      {tdpPar1Sel.length > 0 && (<>
+                        {tdpPhase12.length > 0 && <span className="text-slate-300 text-xs">→</span>}
                         <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
-                          <span className="text-[10px] text-slate-400" title="LST dalys vyksta lygiagrečiai, kai baigta BD+SP+SA">∥ po BD+SP+SA</span>
-                          {tdpPar.map(partChip)}
+                          <span className="text-[10px] text-slate-400" title="Lygiagrečiai po SP">∥</span>
+                          {tdpPar1Sel.map(partChip)}
                         </span>
-                      )}
+                      </>)}
+                      {hasSvok && (<>
+                        {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0) && <span className="text-slate-300 text-xs">→</span>}
+                        {partChip('SVOK')}
+                      </>)}
+                      {tdpPar2Sel.length > 0 && (<>
+                        {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0 || hasSvok) && <span className="text-slate-300 text-xs">→</span>}
+                        <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
+                          <span className="text-[10px] text-slate-400" title="Kitos dalys — lygiagrečiai po ŠVOK">∥ kitos</span>
+                          {tdpPar2Sel.map(partChip)}
+                        </span>
+                      </>)}
+                      {hasBd && (<>
+                        {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0 || hasSvok || tdpPar2Sel.length > 0) && <span className="text-slate-300 text-xs">→</span>}
+                        {partChip('BD')}
+                      </>)}
                     </div>
                   )}
                 </>

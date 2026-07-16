@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calcTargetDate, calcStageDates, calcEffectiveStageDates, calcEffectiveTargetDate, calcCustomPartDates, validStageIds } from './defaultData';
+import { tdpBlockDays, tdpPartOffsetDays } from './schedule';
 import { SelectedParts, CustomPart } from './types';
 
 // SVARBU: testai leidžiami su TZ=Europe/Vilnius (žr. package.json „test" skriptą),
@@ -36,8 +37,8 @@ describe('calcTargetDate', () => {
     expect(calcTargetDate(start, { ...base, KITA: true, KITA_days: 21 })).toBe('2026-06-03');
   });
   it('pilna grandinė (viešinimas, IP, pakartotinis, ekspertizė, visos TDP dalys)', () => {
-    // 2026-07-15: SK 4→6 sav., LVN →4 sav. (Kristinos patikslintos trukmės)
-    expect(calcTargetDate(start, { ...base, VIESIMAS: true, IP: true, PAKARTOTINIS: true, EKSPERTIZE: true, SK: true, LVN: true, BD: true })).toBe('2026-11-19');
+    // 2026-07-16 fazės: SA 14 + SP 7 + max(SK 42, LVN 28) + BD 7 = 70 d. TDP blokas
+    expect(calcTargetDate(start, { ...base, VIESIMAS: true, IP: true, PAKARTOTINIS: true, EKSPERTIZE: true, SK: true, LVN: true, BD: true })).toBe('2026-10-07');
   });
 });
 
@@ -47,7 +48,7 @@ describe('calcStageDates', () => {
       SR: { startDate: '2026-01-01', endDate: '2026-02-05' },
       PP: { startDate: '2026-02-05', endDate: '2026-04-01' },
       SLD: { startDate: '2026-04-01', endDate: '2026-05-13' },
-      TDP: { startDate: '2026-04-01', endDate: '2026-05-06' },
+      TDP: { startDate: '2026-04-01', endDate: '2026-04-22' }, // SA 14 + SP 7 = 21 d.
     });
   });
   it('ilgas DP pastumia SLD/TDP pradžią iki DP pabaigos', () => {
@@ -56,7 +57,7 @@ describe('calcStageDates', () => {
       SR: { startDate: '2026-01-01', endDate: '2026-02-05' },
       PP: { startDate: '2026-02-05', endDate: '2026-04-01' },
       SLD: { startDate: '2026-04-22', endDate: '2026-06-03' },
-      TDP: { startDate: '2026-04-22', endDate: '2026-05-27' },
+      TDP: { startDate: '2026-04-22', endDate: '2026-05-13' },
     });
   });
 });
@@ -67,6 +68,25 @@ describe('calcCustomPartDates', () => {
       c1: { startDate: '2026-05-13', endDate: '2026-06-10' },
       c2: { startDate: '2026-04-22', endDate: '2026-05-06' },
     });
+  });
+});
+
+describe('TDP fazės: SA → SP → ∥(SK,LVN,E) → ŠVOK → ∥(kitos) → BD', () => {
+  const full: SelectedParts = { ...base, SK: true, LVN: true, E: true, SVOK: true, VN: true, BD: true };
+  it('bloko trukmė — fazių suma', () => {
+    // SA 14 + SP 7 + max(SK 42, LVN 28, E 28) + ŠVOK 28 + max(VN 28) + BD 7 = 126
+    expect(tdpBlockDays(full)).toBe(126);
+    expect(tdpBlockDays(base)).toBe(21); // SA 14 + SP 7
+    expect(tdpBlockDays({ ...base, SA: false, SP: false })).toBe(14); // bazė be dalių
+  });
+  it('dalių poslinkiai pagal fazes', () => {
+    expect(tdpPartOffsetDays(full, 'SA')).toBe(0);
+    expect(tdpPartOffsetDays(full, 'SP')).toBe(14);
+    expect(tdpPartOffsetDays(full, 'SK')).toBe(21);  // po SA+SP
+    expect(tdpPartOffsetDays(full, 'E')).toBe(21);   // lygiagrečiai su SK
+    expect(tdpPartOffsetDays(full, 'SVOK')).toBe(63); // po max(SK 42)
+    expect(tdpPartOffsetDays(full, 'VN')).toBe(91);  // po ŠVOK
+    expect(tdpPartOffsetDays(full, 'BD')).toBe(119); // pačioje pabaigoje
   });
 });
 
@@ -88,7 +108,7 @@ describe('calcEffectiveStageDates', () => {
       SR: { startDate: '2026-01-01', endDate: '2026-03-01' },
       PP: { startDate: '2026-03-01', endDate: '2026-04-25', isShifted: true },
       SLD: { startDate: '2026-04-25', endDate: '2026-06-06', isShifted: true },
-      TDP: { startDate: '2026-04-25', endDate: '2026-05-30', isShifted: true },
+      TDP: { startDate: '2026-04-25', endDate: '2026-05-16', isShifted: true },
     });
   });
   it('faktinė TDP pabaiga: lygiagreti papildoma dalis bloko nebepratęsia', () => {
@@ -109,7 +129,7 @@ describe('calcEffectiveStageDates', () => {
       SR: { startDate: '2026-01-01', endDate: '2026-02-05' },
       PP: { startDate: '2026-03-01', endDate: '2026-04-25', isShifted: true },
       SLD: { startDate: '2026-04-25', endDate: '2026-06-06', isShifted: true },
-      TDP: { startDate: '2026-04-25', endDate: '2026-05-30', isShifted: true },
+      TDP: { startDate: '2026-04-25', endDate: '2026-05-16', isShifted: true },
     });
   });
 });

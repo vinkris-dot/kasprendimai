@@ -30,50 +30,59 @@ export function validStageIds(sp: SelectedParts): StageId[] {
   return ids;
 }
 
-/**
- * Lygiagrečių papildomų dalių prefiksas TDP bloke: kiek dienų praeina iki
- * SP ir SA pabaigos (po jų prasideda lygiagrečios papildomos dalys).
- */
-export function tdpSpSaPrefixDays(parts: SelectedParts): number {
-  if (!parts.TDP) return 0;
-  // Subdalys rodomos nuo TDP bloko pradžios (BD → SP → SA). Lygiagreti dalis
-  // prasideda baigus SA — t.y. po BD+SP+SA trukmės (be atskiros TDP bazės).
-  let prefix = 0;
-  if (parts.BD) prefix += 7;
-  if (parts.SP) prefix += 7;
-  if (parts.SA) prefix += 14;
-  return prefix;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// TDP dalių fazės (Kristinos seka 2026-07-16):
+//   SA → SP → ∥(SK, LVN, E) → ŠVOK → ∥(kitos dalys + custom ∥) → BD
+// BD (bendroji dalis) daroma PABAIGOJE — komplektuojant/užbaigiant projektą.
+// ─────────────────────────────────────────────────────────────────────────────
 
-/** LST 1516 TDP dalys, vykstančios lygiagrečiai TDP bloke (po BD+SP+SA): trukmės dienomis. */
-export const PARALLEL_TDP_PARTS: Partial<Record<PartId, number>> = {
-  T: 28, VN: 28, SVOK: 28, E: 28, ER: 14, GSS: 14, GS: 14, SO: 7, KS: 7,
+/** 3 fazė — lygiagrečiai po SP: konstrukcijos, lietaus vanduo, elektra (laukas). */
+export const TDP_PAR1: PartId[] = ['SK', 'LVN', 'E'];
+/** 5 fazė — kitos dalys lygiagrečiai po ŠVOK. */
+export const TDP_PAR2: PartId[] = ['T', 'VN', 'ER', 'GSS', 'GS', 'SO', 'KS'];
+/** TDP dalių trukmės dienomis (šaltinis grafiko skaičiavimams). */
+export const TDP_PART_DAYS: Partial<Record<PartId, number>> = {
+  SA: 14, SP: 7, SK: 42, LVN: 28, E: 28, SVOK: 28,
+  T: 28, VN: 28, ER: 14, GSS: 14, GS: 14, SO: 7, KS: 7, BD: 7,
 };
 
-/** TDP bloko trukmė įskaitant lygiagrečias papildomas ir LST dalis (po SP/SA). */
-export function tdpBlockDays(parts: SelectedParts, customParts: CustomPart[] = []): number {
-  let tdpDays = rawTdpDays(parts);
-  const parallelDur = [
-    ...customParts.filter(c => c.parallel && c.weeks > 0).map(c => c.weeks * 7),
-    ...Object.entries(PARALLEL_TDP_PARTS).filter(([id]) => parts[id as PartId]).map(([, d]) => d as number),
-  ];
-  if (parallelDur.length) {
-    const prefix = tdpSpSaPrefixDays(parts);
-    tdpDays = Math.max(tdpDays, prefix + Math.max(...parallelDur));
-  }
-  return tdpDays;
+const maxOr0 = (arr: number[]) => (arr.length ? Math.max(...arr) : 0);
+
+/** TDP dalies pradžios poslinkis dienomis nuo TDP bloko pradžios pagal fazes. */
+export function tdpPartOffsetDays(parts: SelectedParts, pid: PartId): number {
+  let off = 0;
+  if (pid === 'SA') return off;
+  if (parts.SA) off += TDP_PART_DAYS.SA!;
+  if (pid === 'SP') return off;
+  if (parts.SP) off += TDP_PART_DAYS.SP!;
+  if (TDP_PAR1.includes(pid)) return off;
+  off += maxOr0(TDP_PAR1.filter(p => parts[p]).map(p => TDP_PART_DAYS[p]!));
+  if (pid === 'SVOK') return off;
+  if (parts.SVOK) off += TDP_PART_DAYS.SVOK!;
+  if (TDP_PAR2.includes(pid)) return off;
+  off += maxOr0(TDP_PAR2.filter(p => parts[p]).map(p => TDP_PART_DAYS[p]!));
+  return off; // BD — pačioje pabaigoje
 }
 
-/** TDP lango trukmė be papildomų dalių (rodoma TDP etapo kortelėje). */
-function rawTdpDays(parts: SelectedParts): number {
+/** Lygiagrečių custom dalių pradžia: kartu su „kitomis" dalimis (5 fazė). */
+export function tdpCustomParallelOffsetDays(parts: SelectedParts): number {
+  return tdpPartOffsetDays(parts, 'T');
+}
+
+/** TDP bloko trukmė: fazių suma (min. 14 d. bazė), įskaitant lygiagrečias custom dalis. */
+export function tdpBlockDays(parts: SelectedParts, customParts: CustomPart[] = []): number {
   if (!parts.TDP) return 0;
-  let days = 14; // bazė
-  if (parts.BD) days += 7;
-  if (parts.SP) days += 7;
-  if (parts.SA) days += 14;
-  if (parts.SK) days += 42; // 6 sav.
-  if (parts.LVN) days += 28; // 4 sav.
-  return days;
+  let days = 0;
+  if (parts.SA) days += TDP_PART_DAYS.SA!;
+  if (parts.SP) days += TDP_PART_DAYS.SP!;
+  days += maxOr0(TDP_PAR1.filter(p => parts[p]).map(p => TDP_PART_DAYS[p]!));
+  if (parts.SVOK) days += TDP_PART_DAYS.SVOK!;
+  days += maxOr0([
+    ...TDP_PAR2.filter(p => parts[p]).map(p => TDP_PART_DAYS[p]!),
+    ...customParts.filter(c => c.parallel && c.weeks > 0).map(c => c.weeks * 7),
+  ]);
+  if (parts.BD) days += TDP_PART_DAYS.BD!;
+  return Math.max(days, 14); // bazė — minimalus TDP langas
 }
 
 type Win = { startDate: string; endDate: string; isShifted?: boolean };
@@ -153,10 +162,11 @@ function walkSchedule(
     if (dpEnd > cursor) cursor = dpEnd;
   }
 
-  // SLD ir TDP lygiagrečiai
+  // SLD ir TDP lygiagrečiai. TDP langas = visos fazės (SA → SP → ∥ → ŠVOK → ∥ → BD),
+  // įskaitant lygiagrečias custom dalis — žr. tdpBlockDays.
   const parallelStart = new Date(cursor);
   const sldDays = parts.SLD ? 42 : 0;
-  const tdpDays = rawTdpDays(parts);
+  const tdpDays = tdpBlockDays(parts, customParts);
   const sldStart = effStart('SLD', parallelStart);
   const tdpStart = effStart('TDP', parallelStart);
   let sldEnd = parallelStart;
@@ -170,15 +180,6 @@ function walkSchedule(
     stages['TDP'] = { startDate: fmt(tdpStart), endDate: fmt(tdpEnd), ...shifted('TDP', tdpStart) };
   }
   cursor = sldEnd > tdpEnd ? sldEnd : tdpEnd;
-
-  // Lygiagrečios papildomos dalys gali pratęsti bloką (jei TDP dar nebaigtas faktiškai)
-  if (!statuses?.['TDP']?.endDate) {
-    const blockPlannedEnd = new Date(Math.max(
-      addDays(sldStart, sldDays).getTime(),
-      addDays(tdpStart, tdpBlockDays(parts, customParts)).getTime(),
-    ));
-    if (blockPlannedEnd > cursor) cursor = blockPlannedEnd;
-  }
 
   // Pakartotinis derinimas
   if (parts.PAKARTOTINIS) {
@@ -269,10 +270,11 @@ export function calcCustomPartDates(
     if (e > chainEnd) chainEnd = e;
   }
 
-  // Lygiagrečios dalys: po SP/SA TDP bloke (arba nuo lygiagretaus bloko pradžios, jei nėra TDP)
+  // Lygiagrečios dalys: „kitų dalių" fazėje po ŠVOK (arba nuo lygiagretaus
+  // bloko pradžios, jei nėra TDP)
   const tdp = stageDates['TDP'] ?? stageDates['SLD'];
   const parallelStartBase = tdp
-    ? addDays(new Date(tdp.startDate), parts.TDP ? tdpSpSaPrefixDays(parts) : 0)
+    ? addDays(new Date(tdp.startDate), parts.TDP ? tdpCustomParallelOffsetDays(parts) : 0)
     : chainEnd;
 
   // Nuoseklios dalys: krauname prie grandinės pabaigos

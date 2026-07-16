@@ -110,21 +110,21 @@ describe('getResultReadiness', () => {
 });
 
 describe('getProjectResultIds', () => {
-  it('rodo pasirinktas dalis, slepia baigtas', () => {
+  it('rodo pasirinktas dalis fazių tvarka, slepia baigtas', () => {
     const p = makeProject();
-    expect(getProjectResultIds(p)).toEqual(['SR', 'PP', 'SLD', 'TDP', 'SP', 'SA', 'EKSPERTIZE']);
+    expect(getProjectResultIds(p)).toEqual(['SR', 'PP', 'SLD', 'TDP', 'SA', 'SP', 'EKSPERTIZE']);
     p.completedStages = ['PP'];
     expect(getProjectResultIds(p)).not.toContain('PP');
   });
 });
 
 describe('getUnlockPriorities', () => {
-  it('PP baigimas atrakina daugiausiai (SLD, SP, SA)', () => {
+  it('PP baigimas atrakina daugiausiai (SLD, TDP, SA)', () => {
     const p = makeProject();
     markReceived(p, 'doc-00', 'doc-01', 'doc-02', 'doc-03', 'doc-04', 'doc-05', 'doc-06', 'doc-07');
     const top = getUnlockPriorities(p)[0];
     expect(top.input.partId).toBe('PP');
-    expect(top.unlocks).toEqual(expect.arrayContaining(['SLD', 'SP', 'SA']));
+    expect(top.unlocks).toEqual(expect.arrayContaining(['SLD', 'TDP', 'SA']));
   });
   it('vienodi dokumentų įėjimai sujungiami', () => {
     const p = makeProject();
@@ -162,18 +162,47 @@ describe('proceso logika: TDP lygiagrečiai su SLD', () => {
   });
 });
 
-describe('TDP dalių seka: BD → SP → SA → SK → LVN', () => {
-  it('SK laukia SA (konstrukcijos po architektūros) ir 06', () => {
+describe('TDP dalių fazės: SA → SP → ∥(SK,LVN,E) → ŠVOK → ∥(kitos) → BD', () => {
+  const done = { startDate: '2026-03-01', endDate: '2026-03-15', completed: true, notes: '' };
+  it('SA po PP; SP laukia SA; SK laukia SP ir 06', () => {
     const p = makeProject({ selectedParts: { ...DEFAULT_PARTS, SP: true, SA: true, SK: true } });
     p.completedStages = ['PP'];
     p.activeStages = ['SLD', 'TDP'];
-    expect(getResultReadiness(p, 'SK').ready).toBe(false);
+    markReceived(p, 'doc-07');
+    expect(getResultReadiness(p, 'SA').ready).toBe(true);   // po PP — pirmoji
+    expect(getResultReadiness(p, 'SP').ready).toBe(false);  // laukia SA
+    p.partStatuses = { SA: done };
+    expect(getResultReadiness(p, 'SP').ready).toBe(true);
+    expect(getResultReadiness(p, 'SK').ready).toBe(false);  // laukia SP ir 06
     markReceived(p, 'doc-06');
-    expect(getResultReadiness(p, 'SK').ready).toBe(false); // dar trūksta SA
-    p.partStatuses = { SA: { startDate: '2026-03-01', endDate: '2026-03-15', completed: true, notes: '' } };
+    p.partStatuses = { SA: done, SP: done };
     expect(getResultReadiness(p, 'SK').ready).toBe(true);
   });
-  it('BD atsirakina baigus PP', () => {
+  it('ŠVOK laukia pasirinktų SK/LVN/E; kitos dalys — ŠVOK; BD — visų', () => {
+    const p = makeProject({
+      selectedParts: { ...DEFAULT_PARTS, SA: true, SP: true, SK: true, E: true, SVOK: true, VN: true, BD: true },
+    });
+    p.completedStages = ['PP'];
+    p.activeStages = ['TDP'];
+    expect(getResultReadiness(p, 'SVOK').ready).toBe(false); // laukia SK ir E
+    p.partStatuses = { SA: done, SP: done, SK: done, E: done };
+    expect(getResultReadiness(p, 'SVOK').ready).toBe(true);
+    expect(getResultReadiness(p, 'VN').ready).toBe(false);   // laukia ŠVOK
+    expect(getResultReadiness(p, 'BD').ready).toBe(false);   // laukia ŠVOK ir VN
+    p.partStatuses = { SA: done, SP: done, SK: done, E: done, SVOK: done, VN: done };
+    expect(getResultReadiness(p, 'VN').ready).toBe(true);
+    expect(getResultReadiness(p, 'BD').ready).toBe(true);    // komplektavimas galimas
+  });
+  it('dalies endDate (be completed) užskaito ją kaip baigtą — grafiko ✓ rašo endDate', () => {
+    const p = makeProject({ selectedParts: { ...DEFAULT_PARTS, SP: true, SA: true } });
+    p.completedStages = ['PP'];
+    p.activeStages = ['TDP'];
+    markReceived(p, 'doc-07');
+    expect(getResultReadiness(p, 'SP').ready).toBe(false);
+    p.partStatuses = { SA: { startDate: '', endDate: '2026-03-15', completed: false, notes: '' } };
+    expect(getResultReadiness(p, 'SP').ready).toBe(true);
+  });
+  it('BD be kitų TDP dalių atsirakina po PP (fallback)', () => {
     const p = makeProject({ selectedParts: { ...DEFAULT_PARTS, BD: true } });
     expect(getResultReadiness(p, 'BD').ready).toBe(false);
     expect(getProjectResultIds(p)).toContain('BD');

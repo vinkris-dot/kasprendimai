@@ -7,7 +7,7 @@ import { useProjects } from '@/lib/useProjects';
 import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU, BylaSection, CustomPart } from '@/lib/types';
 import { getProjectResultIds, getResultReadiness, getStageProcessInfo, isProjectFinished, SUBMITTAL_STAGES, StageProcess, ResultReadiness } from '@/lib/inputs';
-import { PARALLEL_TDP_PARTS } from '@/lib/schedule';
+import { TDP_PAR1, TDP_PAR2, tdpPartOffsetDays } from '@/lib/schedule';
 import InputsTab from '@/app/components/InputsTab';
 import { todayLT } from '@/lib/dates';
 
@@ -150,28 +150,18 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   // All TDP sub-parts (for toggles)
   const tdpSubParts = PROJECT_PARTS.filter(p => p.group === 'tdp' && p.id !== 'TDP' && p.id !== 'EKSPERTIZE');
 
-  // Compute planned dates for each active TDP sub-part:
-  // BD/SP/SA/SK/LVN — nuosekliai; LST dalys (T, VN, ŠVOK...) — lygiagrečiai po BD+SP+SA
+  // Planned dates for each active TDP sub-part pagal fazes:
+  // SA → SP → ∥(SK, LVN, E) → ŠVOK → ∥(kitos) → BD (žr. schedule.ts tdpPartOffsetDays)
   const tdpPlannedDates: Record<string, { startDate: string; endDate: string }> = (() => {
     const tdpStart = plannedDates['TDP']?.startDate;
     if (!tdpStart) return {};
     const addDays = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    let cursor = new Date(tdpStart);
     const result: Record<string, { startDate: string; endDate: string }> = {};
-    let prefixDays = 0;
-    if (selectedParts.BD) prefixDays += 7;
-    if (selectedParts.SP) prefixDays += 7;
-    if (selectedParts.SA) prefixDays += 14;
     for (const p of tdpSubParts) {
       if (!selectedParts[p.id as PartId]) continue;
-      if (PARALLEL_TDP_PARTS[p.id as PartId] != null) {
-        const start = addDays(new Date(tdpStart), prefixDays);
-        result[p.id] = { startDate: fmt(start), endDate: fmt(addDays(start, p.durationDays)) };
-        continue;
-      }
-      result[p.id] = { startDate: fmt(cursor), endDate: fmt(addDays(cursor, p.durationDays)) };
-      cursor = addDays(cursor, p.durationDays);
+      const start = addDays(new Date(tdpStart), tdpPartOffsetDays(selectedParts, p.id as PartId));
+      result[p.id] = { startDate: fmt(start), endDate: fmt(addDays(start, p.durationDays)) };
     }
     return result;
   })();
@@ -734,17 +724,20 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             const buildBlockers = (['SLD', 'TDP', 'PAKARTOTINIS', 'EKSPERTIZE'] as StageId[])
               .filter(sid => has(sid) && getStageProcessInfo(project, sid).state !== 'baigta')
               .map(sid => STAGES.find(s => s.id === sid)!.shortName);
-            const tdpSeqParts = (['BD', 'SP', 'SA', 'SK', 'LVN'] as PartId[]).filter(pid => selectedParts[pid]);
-            const tdpParParts = (Object.keys(PARALLEL_TDP_PARTS) as PartId[]).filter(pid => selectedParts[pid]);
-            const tdpReady = getResultReadiness(project, 'TDP').ready;
-            const prefixDone = (['BD', 'SP', 'SA'] as PartId[]).filter(pid => selectedParts[pid])
-              .every(pid => project.partStatuses?.[pid]?.completed);
-            const partChip = (pid: PartId, readyOverride?: boolean) => {
+            // TDP fazės: SA → SP → ∥(SK, LVN, E) → ŠVOK → ∥(kitos) → BD pabaigoje
+            const selPart = (pid: PartId) => !!selectedParts[pid];
+            const tdpPhase12 = (['SA', 'SP'] as PartId[]).filter(selPart);
+            const tdpPar1Sel = TDP_PAR1.filter(selPart);
+            const tdpPar2Sel = TDP_PAR2.filter(selPart);
+            const hasSvok = selPart('SVOK');
+            const hasBd = selPart('BD');
+            const anyTdpParts = tdpPhase12.length + tdpPar1Sel.length + tdpPar2Sel.length > 0 || hasSvok || hasBd;
+            const partChip = (pid: PartId) => {
               const part = PROJECT_PARTS.find(p => p.id === pid);
               const ps = project.partStatuses?.[pid];
-              const state: StageProcess = ps?.completed ? 'baigta'
+              const state: StageProcess = (ps?.completed || ps?.endDate) ? 'baigta'
                 : ps?.startDate ? 'dirbama'
-                : (readyOverride ?? getResultReadiness(project, pid).ready) ? 'galima' : 'laukiama';
+                : getResultReadiness(project, pid).ready ? 'galima' : 'laukiama';
               return (
                 <span key={pid} title={part?.description} className={`text-[11px] border rounded-full px-2 py-0.5 whitespace-nowrap ${STATE_CHIP[state]}`}>
                   {STATE_ICON[state]} {part?.label ?? pid}
@@ -798,21 +791,37 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       : `Statyba ${formatDate(effectiveTargetDate || project.targetConstructionDate)}`}
                   </span>
                 </div>
-                {(tdpSeqParts.length > 0 || tdpParParts.length > 0) && (
+                {anyTdpParts && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-slate-100">
                     <span className="text-[10px] text-slate-400 font-medium">TDP dalys:</span>
-                    {tdpSeqParts.map((pid, idx) => (
+                    {tdpPhase12.map((pid, idx) => (
                       <span key={pid} className="inline-flex items-center gap-1.5">
                         {idx > 0 && <span className="text-slate-300 text-xs">→</span>}
                         {partChip(pid)}
                       </span>
                     ))}
-                    {tdpParParts.length > 0 && (
+                    {tdpPar1Sel.length > 0 && (<>
+                      {tdpPhase12.length > 0 && <span className="text-slate-300 text-xs">→</span>}
                       <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
-                        <span className="text-[10px] text-slate-400" title="LST dalys vyksta lygiagrečiai, kai baigta BD+SP+SA">∥ po BD+SP+SA</span>
-                        {tdpParParts.map(pid => partChip(pid, tdpReady && prefixDone))}
+                        <span className="text-[10px] text-slate-400" title="Lygiagrečiai po SP">∥</span>
+                        {tdpPar1Sel.map(pid => partChip(pid))}
                       </span>
-                    )}
+                    </>)}
+                    {hasSvok && (<>
+                      {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0) && <span className="text-slate-300 text-xs">→</span>}
+                      {partChip('SVOK')}
+                    </>)}
+                    {tdpPar2Sel.length > 0 && (<>
+                      {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0 || hasSvok) && <span className="text-slate-300 text-xs">→</span>}
+                      <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
+                        <span className="text-[10px] text-slate-400" title="Kitos dalys — lygiagrečiai po ŠVOK">∥ kitos</span>
+                        {tdpPar2Sel.map(pid => partChip(pid))}
+                      </span>
+                    </>)}
+                    {hasBd && (<>
+                      {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0 || hasSvok || tdpPar2Sel.length > 0) && <span className="text-slate-300 text-xs">→</span>}
+                      {partChip('BD')}
+                    </>)}
                   </div>
                 )}
               </div>
@@ -1106,7 +1115,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                                       : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-400'
                                 }`}
                               >
-                                {p.label} <span className={active ? 'text-indigo-200' : 'text-slate-300'}>{PARALLEL_TDP_PARTS[p.id as PartId] != null ? '⇄ ' : ''}{p.durationDays / 7} sav.</span>
+                                {p.label} <span className={active ? 'text-indigo-200' : 'text-slate-300'}>{(TDP_PAR1.includes(p.id as PartId) || TDP_PAR2.includes(p.id as PartId)) ? '⇄ ' : ''}{p.durationDays / 7} sav.</span>
                               </button>
                             );
                           })}

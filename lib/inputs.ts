@@ -39,23 +39,25 @@ export const DEFAULT_RESULT_INPUTS: Record<string, ResultInput[]> = {
     { id: 'in-sld-05', label: 'Specialieji reikalavimai (05)', kind: 'dokumentas', docId: 'doc-05' },
     { id: 'in-sld-06', label: 'Prisijungimo sąlygos (06)', kind: 'dokumentas', docId: 'doc-06' },
   ],
-  // TDP dalių seka: BD → SP → SA → SK → LVN (trukmės žr. schedule.ts)
-  BD: [
-    { id: 'in-bd-pp', label: 'PP baigtas', kind: 'brezinys', partId: 'PP' },
-  ],
-  SP: [
-    { id: 'in-sp-pp', label: 'PP baigtas', kind: 'brezinys', partId: 'PP' },
-    { id: 'in-sp-07', label: 'Toponuotrauka (07)', kind: 'brezinys', docId: 'doc-07' },
-  ],
+  // TDP dalių fazės: SA → SP → ∥(SK, LVN, E) → ŠVOK → ∥(kitos) → BD pabaigoje.
+  // ŠVOK, kitų dalių ir BD įėjimai generuojami dinamiškai pagal pasirinktas
+  // dalis — žr. dynamicTdpInputs().
   SA: [
     { id: 'in-sa-pp', label: 'PP baigtas', kind: 'brezinys', partId: 'PP' },
   ],
+  SP: [
+    { id: 'in-sp-sa', label: 'Architektūrinė dalis (SA) baigta', kind: 'brezinys', partId: 'SA' },
+    { id: 'in-sp-07', label: 'Toponuotrauka (07)', kind: 'brezinys', docId: 'doc-07' },
+  ],
   SK: [
     { id: 'in-sk-06', label: 'Prisijungimo sąlygos (06)', kind: 'dokumentas', docId: 'doc-06' },
-    { id: 'in-sk-sa', label: 'Architektūrinė dalis (SA) baigta', kind: 'brezinys', partId: 'SA' },
+    { id: 'in-sk-sp', label: 'Sklypo planas (SP) baigtas', kind: 'brezinys', partId: 'SP' },
   ],
   LVN: [
     { id: 'in-lvn-sp', label: 'Sklypo planas (SP) baigtas', kind: 'brezinys', partId: 'SP' },
+  ],
+  E: [
+    { id: 'in-e-sp', label: 'Sklypo planas (SP) baigtas', kind: 'brezinys', partId: 'SP' },
   ],
   // TDP eina LYGIAGREČIAI su SLD derinimu (startas — po PP), todėl SLD
   // starto neblokuoja — jis reikalingas tik užbaigimui/statybai (soft).
@@ -79,9 +81,52 @@ export const INPUT_KIND_META: Record<ResultInput['kind'], { icon: string; label:
   kita: { icon: '📌', label: 'kita' },
 };
 
-/** Įėjimų sąrašas rezultatui: išsaugotas projekte arba šablonas. */
+const PART_DONE_LABELS: Record<string, string> = {
+  SA: 'Architektūrinė dalis (SA) baigta',
+  SP: 'Sklypo planas (SP) baigtas',
+  SK: 'Konstrukcijos (SK) baigtos',
+  LVN: 'LVN baigta',
+  E: 'Elektra (E) baigta',
+  SVOK: 'ŠVOK baigta',
+};
+
+/**
+ * Dinaminiai TDP dalių įėjimai pagal fazes (SA → SP → ∥(SK,LVN,E) → ŠVOK →
+ * ∥(kitos) → BD): priklausoma tik nuo realiai pasirinktų ankstesnės fazės dalių.
+ */
+function dynamicTdpInputs(project: Project, resultId: string): ResultInput[] | null {
+  const sp = project.selectedParts;
+  const partIn = (pid: string): ResultInput => ({
+    id: `in-${resultId.toLowerCase()}-${pid.toLowerCase()}`,
+    label: PART_DONE_LABELS[pid] ?? `${pid} baigta`,
+    kind: 'brezinys',
+    partId: pid,
+  });
+  const par1 = (['SK', 'LVN', 'E'] as const).filter(p => sp[p]);
+  const par1OrEarlier = () => (par1.length ? par1.map(partIn)
+    : sp.SP ? [partIn('SP')]
+    : sp.SA ? [partIn('SA')]
+    : [{ id: `in-${resultId.toLowerCase()}-pp`, label: 'PP baigtas', kind: 'brezinys' as const, partId: 'PP' }]);
+  if (resultId === 'SVOK') return par1OrEarlier();
+  if (['T', 'VN', 'ER', 'GSS', 'GS', 'SO', 'KS'].includes(resultId)) {
+    return sp.SVOK ? [partIn('SVOK')] : par1OrEarlier();
+  }
+  if (resultId === 'BD') {
+    // BD — komplektavimas pabaigoje: visos kitos pasirinktos TDP dalys baigtos
+    const all = (['SA', 'SP', 'SK', 'LVN', 'E', 'SVOK', 'T', 'VN', 'ER', 'GSS', 'GS', 'SO', 'KS'] as const)
+      .filter(p => sp[p]);
+    return all.length ? all.map(partIn)
+      : [{ id: 'in-bd-pp', label: 'PP baigtas', kind: 'brezinys', partId: 'PP' }];
+  }
+  return null;
+}
+
+/** Įėjimų sąrašas rezultatui: išsaugotas projekte, dinaminis TDP arba šablonas. */
 export function getResultInputs(project: Project, resultId: string): ResultInput[] {
-  return project.inputs?.[resultId] ?? DEFAULT_RESULT_INPUTS[resultId] ?? [];
+  return project.inputs?.[resultId]
+    ?? dynamicTdpInputs(project, resultId)
+    ?? DEFAULT_RESULT_INPUTS[resultId]
+    ?? [];
 }
 
 const STAGE_ORDER: StageId[] = ['DP', 'SR', 'PP', 'PP_VIESIMAS', 'IP', 'SLD', 'PAKARTOTINIS', 'TDP', 'EKSPERTIZE'];
@@ -104,7 +149,9 @@ export function partCompleted(project: Project, partId: string): boolean {
   // projekto konvencija useProjects.toggleStage baigiant paskutinį etapą)
   if (project.stageStatuses?.[stageId]?.endDate) return true;
   if (stageIsPast(project, stageId)) return true;
-  if (project.partStatuses?.[partId]?.completed) return true;
+  // TDP dalies „✓" grafike rašo endDate (ne completed) — abu reiškia baigta
+  const ps = project.partStatuses?.[partId];
+  if (ps?.completed || ps?.endDate) return true;
   return false;
 }
 
@@ -113,7 +160,7 @@ function partActive(project: Project, partId: string): boolean {
   const stageId = partId === 'VIESIMAS' ? 'PP_VIESIMAS' : partId;
   if ((project.activeStages ?? []).includes(stageId as StageId)) return true;
   const ps = project.partStatuses?.[partId];
-  return !!ps?.startDate && !ps?.completed;
+  return !!ps?.startDate && !ps?.completed && !ps?.endDate;
 }
 
 /** Gyva įėjimo būsena. */
@@ -163,11 +210,14 @@ export function getProjectResultIds(project: Project): string[] {
   if (sp.IP) ids.push('IP');
   if (sp.SLD) ids.push('SLD');
   if (sp.TDP) ids.push('TDP');
-  if (sp.BD) ids.push('BD');
-  if (sp.SP) ids.push('SP');
+  // TDP dalys fazių tvarka: SA → SP → (SK, LVN, E) → ŠVOK → ... → BD pabaigoje
   if (sp.SA) ids.push('SA');
+  if (sp.SP) ids.push('SP');
   if (sp.SK) ids.push('SK');
   if (sp.LVN) ids.push('LVN');
+  if (sp.E) ids.push('E');
+  if (sp.SVOK) ids.push('SVOK');
+  if (sp.BD) ids.push('BD');
   if (sp.EKSPERTIZE) ids.push('EKSPERTIZE');
   // Rankiniai sąrašai rezultatams, kurių nėra tarp pasirinktų dalių
   for (const key of Object.keys(project.inputs ?? {})) {

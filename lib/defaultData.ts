@@ -53,7 +53,7 @@ export const PROJECT_PARTS: PartConfig[] = [
   {
     id: 'BD',
     label: 'BD',
-    description: 'Bendroji dalis',
+    description: 'Bendroji dalis (komplektavimas TDP pabaigoje)',
     durationDays: 7, // 1 sav.
     group: 'tdp',
   },
@@ -326,10 +326,11 @@ export const STAGES: StageInfo[] = [
     textClass: 'text-indigo-700',
     tasks: [
       { label: 'TDP startas (lygiagrečiai su SLD derinimu)', duration: '—' },
-      { label: 'SA + SK', duration: '1 mėn.' },
-      { label: 'VN + EL + ŠVOK', duration: '5 sav.' },
-      { label: 'Gaisrinė + energija', duration: '2 sav.' },
-      { label: 'Komplektavimas ekspertizei', duration: '2 sav.' },
+      { label: 'SA → SP', duration: '3 sav.' },
+      { label: '∥ SK + LVN + E (elektra, laukas)', duration: '6 sav.' },
+      { label: 'ŠVOK', duration: '4 sav.' },
+      { label: '∥ kitos dalys (T, VN, ER, GSS, GS, SO, KS)', duration: '4 sav.' },
+      { label: 'BD + komplektavimas (projekto užbaigimas)', duration: '1 sav.' },
     ],
   },
   {

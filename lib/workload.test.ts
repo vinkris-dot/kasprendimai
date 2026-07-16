@@ -106,7 +106,7 @@ describe('valandinė apkrova', () => {
     const w = getTeamWorkload([p]);
     expect(w.KV.workableHours).toBeCloseTo(0.6, 1);
   });
-  it('TDP: pasirinktų dalių suma paskleista per bloką (SP+SA: 43 val. / 5 sav.)', () => {
+  it('TDP: pasirinktų dalių suma paskleista per bloką (SP+SA: 43 val. / 3 sav.)', () => {
     const p = makeProject({
       activeStages: ['TDP'] as StageId[],
       selectedParts: { ...DEFAULT_PARTS, SP: true, SA: true },
@@ -115,9 +115,9 @@ describe('valandinė apkrova', () => {
     markAllReceived(p);
     p.completedStages = ['SLD'] as StageId[];
     const w = getTeamWorkload([p]);
-    // TDP blokas: 14 bazė + 7 SP + 14 SA = 35 d. = 5 sav.; (12+31)/5 = 8.6
+    // TDP blokas pagal fazes: SA 14 + SP 7 = 21 d. = 3 sav.; (12+31)/3 ≈ 14.3
     // (2026-07-16: LL PP 24 val., SA 48→31, SP 19→12)
-    expect(w.LL.workableHours).toBeCloseTo(8.6, 1);
+    expect(w.LL.workableHours).toBeCloseTo(14.3, 1);
   });
 });
 
