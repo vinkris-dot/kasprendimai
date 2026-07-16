@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
 import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU, BylaSection, CustomPart } from '@/lib/types';
-import { getProjectResultIds, getResultReadiness } from '@/lib/inputs';
+import { getProjectResultIds, getResultReadiness, getStageProcessInfo, isProjectFinished, SUBMITTAL_STAGES, StageProcess, ResultReadiness } from '@/lib/inputs';
 import { PARALLEL_TDP_PARTS } from '@/lib/schedule';
 import InputsTab from '@/app/components/InputsTab';
 import { todayLT } from '@/lib/dates';
@@ -113,7 +113,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const activeStages = STAGES.filter(s => activeStageIds.includes(s.id));
   const currentStages = project.activeStages ?? ['SR'];
   const completedStages = project.completedStages ?? [];
-  const minActiveIndex = Math.min(...currentStages.map(s => activeStages.findIndex(a => a.id === s)).filter(i => i >= 0));
+  // Be aktyvių etapų (pvz., ką tik baigus vienintelį aktyvų) nė vienas etapas
+  // nelaikomas „praėjusiu" pagal indeksą — kitaip Math.min(...[])=Infinity
+  // visus paverstų „ankstesniais" ir paslėptų atrakinimo būsenas.
+  const activeIdxs = currentStages.map(s => activeStages.findIndex(a => a.id === s)).filter(i => i >= 0);
+  const minActiveIndex = activeIdxs.length ? Math.min(...activeIdxs) : -1;
 
   const customParts = project.customParts ?? [];
   const plannedDates = calcStageDates(project.startDate, selectedParts, customParts);
@@ -276,6 +280,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
   const readyResults = getProjectResultIds(project).map(rid => getResultReadiness(project, rid));
   const readyCount = readyResults.filter(r => r.ready).length;
+
+  // „Baigtas" — tik kai visi pasirinkti etapai faktiškai baigti, ne kai
+  // tiesiog nėra aktyvių (vidury proceso tai reiškia „niekas nedirbama").
+  const projectDone = isProjectFinished(project);
+  const stageDone = (sid: StageId) => getStageProcessInfo(project, sid).state === 'baigta';
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'grafikas', label: 'Grafikas' },
@@ -503,7 +512,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     </span>
                   )}
                   <h1 className="text-2xl font-semibold text-slate-900">{projectLabel(project)}</h1>
-                  {currentStages.length === 0 && (
+                  {projectDone && (
                     <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700">Baigtas</span>
                   )}
                   <button onClick={handleEditOpen} className="text-slate-400 hover:text-slate-700 transition-colors" title="Redaguoti">
@@ -527,7 +536,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </div>
             {project.deadline && (() => {
               const today = todayLT();
-              const overdue = project.deadline < today && currentStages.length > 0;
+              const overdue = project.deadline < today && !projectDone;
               return (
                 <div className={`border rounded-xl px-4 py-2.5 mb-2 ${overdue ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
                   <p className={`text-xs ${overdue ? 'text-red-500' : 'text-slate-400'}`}>Sutartas terminas{overdue ? ' — vėluoja!' : ''}</p>
@@ -568,10 +577,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       </div>
 
       {/* Stage selector */}
-      <div className={`rounded-xl border p-4 mb-6 ${currentStages.length === 0 ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
+      <div className={`rounded-xl border p-4 mb-6 ${projectDone ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Aktyvūs etapai</p>
-          {currentStages.length === 0 && (
+          {projectDone && (
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700">Projektas baigtas</span>
           )}
         </div>
@@ -588,12 +597,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 className={`text-xs px-3 py-1.5 rounded-full font-medium border-2 transition-all ${
                   isCurrent
                     ? `${stage.bgClass} ${stage.textClass} ${stage.colorClass}`
-                    : isPast || currentStages.length === 0
+                    : isPast || stageDone(stage.id as StageId)
                     ? 'bg-slate-100 text-slate-400 border-slate-200'
                     : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'
                 }`}
               >
-                {(isPast || currentStages.length === 0) ? '✓ ' : ''}{stage.shortName}
+                {(isPast || stageDone(stage.id as StageId)) ? '✓ ' : ''}{stage.shortName}
               </button>
             );
           })}
@@ -669,18 +678,142 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       {/* GRAFIKAS */}
       {tab === 'grafikas' && (
         <div className="space-y-3">
+          {/* Proceso seka — visa grandinė iki statybos pradžios vienu žvilgsniu */}
+          {(() => {
+            const has = (sid: StageId) => activeStageIds.includes(sid);
+            const parallelAfterPP = (['PP_VIESIMAS', 'IP', 'SLD', 'TDP'] as StageId[]).filter(has);
+            const STATE_CHIP: Record<StageProcess, string> = {
+              baigta: 'bg-green-100 text-green-700 border-green-200',
+              dirbama: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+              priduota: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+              galima: 'bg-sky-100 text-sky-700 border-sky-200',
+              laukiama: 'bg-amber-50 text-amber-600 border-amber-200',
+            };
+            const STATE_ICON: Record<StageProcess, string> = {
+              baigta: '✓', dirbama: '🔨', priduota: '📤', galima: '▶', laukiama: '⏳',
+            };
+            // Trumpas užrakto paaiškinimas: „po PP · dok. 00,05,06"
+            const shortLock = (r: ResultReadiness) => {
+              const hard = r.inputs.filter(i => i.status !== 'yra' && !i.input.soft);
+              const parts = hard.filter(i => i.input.partId).map(i => i.input.partId === 'VIESIMAS' ? 'Viešinimo' : i.input.partId);
+              const docs = hard.filter(i => i.input.docId).map(i => i.input.docId!.replace('doc-', ''));
+              const manual = hard.length - parts.length - docs.length;
+              const bits: string[] = [];
+              if (parts.length) bits.push('po ' + parts.join('+'));
+              if (docs.length) bits.push('dok. ' + docs.join(','));
+              if (manual > 0) bits.push(`+${manual}`);
+              return bits.join(' · ');
+            };
+            const stageChip = (sid: StageId) => {
+              const s = STAGES.find(x => x.id === sid)!;
+              const info = getStageProcessInfo(project, sid);
+              const lock = info.state === 'laukiama' ? shortLock(info.readiness) : '';
+              return (
+                <button
+                  key={sid}
+                  onClick={() => document.getElementById(`stage-${sid}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  title={lock ? `${s.name} — laukia: ${lock}` : s.name}
+                  className={`text-[11px] font-medium border rounded-full px-2 py-0.5 whitespace-nowrap transition-opacity hover:opacity-75 ${STATE_CHIP[info.state]}`}
+                >
+                  {STATE_ICON[info.state]} {s.shortName}
+                  {lock && <span className="font-normal opacity-75"> · {lock}</span>}
+                </button>
+              );
+            };
+            const tdpSeqParts = (['BD', 'SP', 'SA', 'SK', 'LVN'] as PartId[]).filter(pid => selectedParts[pid]);
+            const tdpParParts = (Object.keys(PARALLEL_TDP_PARTS) as PartId[]).filter(pid => selectedParts[pid]);
+            const tdpReady = getResultReadiness(project, 'TDP').ready;
+            const prefixDone = (['BD', 'SP', 'SA'] as PartId[]).filter(pid => selectedParts[pid])
+              .every(pid => project.partStatuses?.[pid]?.completed);
+            const partChip = (pid: PartId, readyOverride?: boolean) => {
+              const part = PROJECT_PARTS.find(p => p.id === pid);
+              const ps = project.partStatuses?.[pid];
+              const state: StageProcess = ps?.completed ? 'baigta'
+                : ps?.startDate ? 'dirbama'
+                : (readyOverride ?? getResultReadiness(project, pid).ready) ? 'galima' : 'laukiama';
+              return (
+                <span key={pid} title={part?.description} className={`text-[11px] border rounded-full px-2 py-0.5 whitespace-nowrap ${STATE_CHIP[state]}`}>
+                  {STATE_ICON[state]} {part?.label ?? pid}
+                </span>
+              );
+            };
+            return (
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                  <h3 className="text-sm font-semibold text-slate-800">Proceso seka</h3>
+                  <span className="text-[10px] text-slate-400">✓ baigta · 🔨 dirbama · 📤 priduota · ▶ galima pradėti · ⏳ laukiama</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {has('DP') && (<>
+                    {stageChip('DP')}
+                    <span className="text-[10px] text-slate-400" title="DP rengiamas lygiagrečiai su SR ir PP">∥</span>
+                  </>)}
+                  {stageChip('SR')}
+                  {has('PP') && (<>
+                    <span className="text-slate-300 text-xs">→</span>
+                    {stageChip('PP')}
+                  </>)}
+                  {parallelAfterPP.length > 0 && (<>
+                    <span className="text-slate-300 text-xs">→</span>
+                    <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
+                      <span className="text-[10px] text-slate-400" title="Atrakina baigtas PP — vyksta lygiagrečiai">po PP ∥</span>
+                      {parallelAfterPP.map(stageChip)}
+                    </span>
+                  </>)}
+                  {has('PAKARTOTINIS') && (<>
+                    <span className="text-slate-300 text-xs">→</span>
+                    {stageChip('PAKARTOTINIS')}
+                  </>)}
+                  {has('EKSPERTIZE') && (<>
+                    <span className="text-slate-300 text-xs">→</span>
+                    {stageChip('EKSPERTIZE')}
+                  </>)}
+                  <span className="text-slate-300 text-xs">→</span>
+                  <span
+                    className="text-[11px] font-semibold border border-slate-300 bg-slate-50 text-slate-700 rounded-full px-2 py-0.5 whitespace-nowrap"
+                    title="Statybai reikia: SLD gautas + TDP baigtas (+ ekspertizė, jei reikalinga)"
+                  >
+                    🏁 Statyba {formatDate(effectiveTargetDate || project.targetConstructionDate)}
+                  </span>
+                </div>
+                {(tdpSeqParts.length > 0 || tdpParParts.length > 0) && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-slate-100">
+                    <span className="text-[10px] text-slate-400 font-medium">TDP dalys:</span>
+                    {tdpSeqParts.map((pid, idx) => (
+                      <span key={pid} className="inline-flex items-center gap-1.5">
+                        {idx > 0 && <span className="text-slate-300 text-xs">→</span>}
+                        {partChip(pid)}
+                      </span>
+                    ))}
+                    {tdpParParts.length > 0 && (
+                      <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
+                        <span className="text-[10px] text-slate-400" title="LST dalys vyksta lygiagrečiai, kai baigta BD+SP+SA">∥ po BD+SP+SA</span>
+                        {tdpParParts.map(pid => partChip(pid, tdpReady && prefixDone))}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* SR always first */}
           {activeStages.map((stage, i) => {
             const isCurrent = currentStages.includes(stage.id);
             const isPast = i < minActiveIndex || completedStages.includes(stage.id as StageId);
             const status = project.stageStatuses[stage.id as StageId];
             const isParallel = stage.id === 'TDP';
+            const procInfo = getStageProcessInfo(project, stage.id as StageId);
+            // Būsimas etapas blukinamas tik kol užrakintas — atrakintas („galima
+            // pradėti") ar faktiškai baigtas turi matytis pilnu ryškumu
+            const dimmed = !isCurrent && !isPast && procInfo.state === 'laukiama';
 
             return (
               <div
                 key={stage.id}
-                className={`bg-white rounded-xl border-l-4 ${stage.colorClass} border border-slate-200 p-4 ${
-                  !isCurrent && !isPast ? 'opacity-50' : ''
+                id={`stage-${stage.id}`}
+                className={`bg-white rounded-xl border-l-4 ${stage.colorClass} border border-slate-200 p-4 scroll-mt-4 ${
+                  dimmed ? 'opacity-60' : ''
                 }`}
               >
                 {/* Header */}
@@ -739,7 +872,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   const hardMissing = missingAll.filter(i => !i.input.soft);
                   const assignees = ((project.stageAssignees ?? {})[stage.id as StageId] ?? []) as TeamMemberId[];
                   const names = assignees.map(id => TEAM_MEMBERS.find(m => m.id === id)?.name ?? id).join(', ');
-                  const submittalStage = ['SLD', 'PAKARTOTINIS', 'EKSPERTIZE', 'IP', 'PP_VIESIMAS'].includes(stage.id);
+                  const submittalStage = SUBMITTAL_STAGES.includes(stage.id as StageId);
                   const orderedDateOf = (docId?: string) => docId
                     ? [...(project.dokumentai ?? []), ...(project.kitiDokumentai ?? [])].find(d => d.id === docId)?.orderedDate
                     : undefined;
@@ -811,6 +944,31 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         <p className="text-sky-500 mt-1">Užbaigimui dar reikės:</p>
                       )}
                       {missingAll.length > 0 && missingLines(missingAll, 'text-sky-600')}
+                    </div>
+                  );
+                })()}
+
+                {/* Būsimo etapo atrakinimas: kas dar užrakinta / galima pradėti anksčiau */}
+                {!isCurrent && !isPast && !status?.endDate && (() => {
+                  if (procInfo.state === 'galima') {
+                    return (
+                      <div className="mb-3 text-xs bg-sky-50 border border-sky-100 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-semibold text-sky-700">▶ Sąlygos startui įvykdytos</span>
+                        <button
+                          onClick={() => toggleStage(project.id, stage.id as StageId)}
+                          className="ml-auto text-[11px] font-semibold bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-2.5 py-1 transition-colors"
+                        >
+                          Pradėti dabar
+                        </button>
+                      </div>
+                    );
+                  }
+                  const hard = procInfo.readiness.inputs.filter(i => i.status !== 'yra' && !i.input.soft);
+                  if (procInfo.state !== 'laukiama' || hard.length === 0) return null;
+                  return (
+                    <div className="mb-3 text-xs bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-slate-500">
+                      <span className="font-semibold">🔒 Atrakins:</span>{' '}
+                      {hard.map(({ input, status: st }) => `${input.label}${st === 'uzsakyta' ? ' (užsakyta)' : ''}`).join(' · ')}
                     </div>
                   );
                 })()}

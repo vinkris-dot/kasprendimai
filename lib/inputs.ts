@@ -1,4 +1,5 @@
 import { Project, ResultInput, InputStatus, StageId } from './types';
+import { validStageIds } from './schedule';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Įėjimų planavimas: „ko man reikia, kad galėčiau padaryti X"
@@ -16,6 +17,8 @@ export const DEFAULT_RESULT_INPUTS: Record<string, ResultInput[]> = {
   SR: [
     { id: 'in-sr-02', label: 'Nuosavybės dokumentas (02)', kind: 'dokumentas', docId: 'doc-02', soft: true },
     { id: 'in-sr-03', label: 'Sklypo ribų planas (03)', kind: 'dokumentas', docId: 'doc-03', soft: true },
+    { id: 'in-sr-04', label: 'Teritorijų planavimo ištrauka (04)', kind: 'dokumentas', docId: 'doc-04', soft: true },
+    { id: 'in-sr-07', label: 'Toponuotrauka (07)', kind: 'brezinys', docId: 'doc-07', soft: true },
   ],
   PP: [
     { id: 'in-pp-01', label: 'Projektavimo užduotis (01)', kind: 'info', docId: 'doc-01', soft: true },
@@ -36,6 +39,10 @@ export const DEFAULT_RESULT_INPUTS: Record<string, ResultInput[]> = {
     { id: 'in-sld-05', label: 'Specialieji reikalavimai (05)', kind: 'dokumentas', docId: 'doc-05' },
     { id: 'in-sld-06', label: 'Prisijungimo sąlygos (06)', kind: 'dokumentas', docId: 'doc-06' },
   ],
+  // TDP dalių seka: BD → SP → SA → SK → LVN (trukmės žr. schedule.ts)
+  BD: [
+    { id: 'in-bd-pp', label: 'PP baigtas', kind: 'brezinys', partId: 'PP' },
+  ],
   SP: [
     { id: 'in-sp-pp', label: 'PP baigtas', kind: 'brezinys', partId: 'PP' },
     { id: 'in-sp-07', label: 'Toponuotrauka (07)', kind: 'brezinys', docId: 'doc-07' },
@@ -45,7 +52,7 @@ export const DEFAULT_RESULT_INPUTS: Record<string, ResultInput[]> = {
   ],
   SK: [
     { id: 'in-sk-06', label: 'Prisijungimo sąlygos (06)', kind: 'dokumentas', docId: 'doc-06' },
-    { id: 'in-sk-sp', label: 'Sklypo planas (SP) baigtas', kind: 'brezinys', partId: 'SP' },
+    { id: 'in-sk-sa', label: 'Architektūrinė dalis (SA) baigta', kind: 'brezinys', partId: 'SA' },
   ],
   LVN: [
     { id: 'in-lvn-sp', label: 'Sklypo planas (SP) baigtas', kind: 'brezinys', partId: 'SP' },
@@ -93,6 +100,9 @@ function stageIsPast(project: Project, stageId: StageId): boolean {
 function partCompleted(project: Project, partId: string): boolean {
   const stageId = (partId === 'VIESIMAS' ? 'PP_VIESIMAS' : partId) as StageId;
   if ((project.completedStages ?? []).includes(stageId)) return true;
+  // Faktinė pabaiga = baigta, net kai completedStages išvalytas (baigto
+  // projekto konvencija useProjects.toggleStage baigiant paskutinį etapą)
+  if (project.stageStatuses?.[stageId]?.endDate) return true;
   if (stageIsPast(project, stageId)) return true;
   if (project.partStatuses?.[partId]?.completed) return true;
   return false;
@@ -153,6 +163,7 @@ export function getProjectResultIds(project: Project): string[] {
   if (sp.IP) ids.push('IP');
   if (sp.SLD) ids.push('SLD');
   if (sp.TDP) ids.push('TDP');
+  if (sp.BD) ids.push('BD');
   if (sp.SP) ids.push('SP');
   if (sp.SA) ids.push('SA');
   if (sp.SK) ids.push('SK');
@@ -197,4 +208,45 @@ export function getUnlockPriorities(project: Project): UnlockPriority[] {
     }
   }
   return [...byKey.values()].sort((a, b) => b.unlocks.length - a.unlocks.length);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Etapo proceso būsena — viena vieta grafiko kortelei ir proceso sekos juostai
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type StageProcess = 'baigta' | 'priduota' | 'dirbama' | 'galima' | 'laukiama';
+
+/** Pridavimo etapai: faktinė pradžia reiškia „priduota, laukiama atsakymo", ne „dirbama". */
+export const SUBMITTAL_STAGES: StageId[] = ['PP_VIESIMAS', 'IP', 'SLD', 'PAKARTOTINIS', 'EKSPERTIZE'];
+
+/** Etapo id → rezultato id įėjimų šablonuose (Viešinimo etapas ↔ VIESIMAS rezultatas). */
+export function stageResultId(stageId: StageId): string {
+  return stageId === 'PP_VIESIMAS' ? 'VIESIMAS' : stageId;
+}
+
+export interface StageProcessInfo {
+  state: StageProcess;
+  readiness: ResultReadiness;
+}
+
+/** Proceso būsena iš duomenų (ne užduočių): baigta / priduota / dirbama / galima / laukiama. */
+export function getStageProcessInfo(project: Project, stageId: StageId): StageProcessInfo {
+  const resultId = stageResultId(stageId);
+  const readiness = getResultReadiness(project, resultId);
+  const status = project.stageStatuses?.[stageId];
+  if (status?.endDate || partCompleted(project, resultId)) return { state: 'baigta', readiness };
+  if (status?.startDate) {
+    return { state: SUBMITTAL_STAGES.includes(stageId) ? 'priduota' : 'dirbama', readiness };
+  }
+  return { state: readiness.ready ? 'galima' : 'laukiama', readiness };
+}
+
+/**
+ * Projektas baigtas tik kai VISI pasirinkti etapai faktiškai baigti.
+ * Tuščias activeStages vidury proceso (pvz., ką tik baigus PP, dar
+ * nepradėjus SLD/TDP) užbaigimo NEreiškia.
+ */
+export function isProjectFinished(project: Project): boolean {
+  return validStageIds(project.selectedParts)
+    .every(sid => getStageProcessInfo(project, sid).state === 'baigta');
 }

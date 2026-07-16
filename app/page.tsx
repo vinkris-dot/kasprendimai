@@ -8,7 +8,7 @@ import { STAGES, calcStageDates, calcEffectiveStageDates, calcEffectiveTargetDat
 import { Project, StageId, TeamMemberId } from '@/lib/types';
 import TasksSidebar from '@/app/components/TasksSidebar';
 import AssistantPanel from '@/app/components/AssistantPanel';
-import { getUnlockPriorities } from '@/lib/inputs';
+import { getUnlockPriorities, isProjectFinished } from '@/lib/inputs';
 import DataSafety from '@/app/components/DataSafety';
 import { useNotifications } from '@/lib/useNotifications';
 import { todayLT } from '@/lib/dates';
@@ -351,9 +351,11 @@ export default function Dashboard() {
 
   if (!loaded) return null;
 
-  const activeProjects = projects.filter(p => !p.archived && !p.paused && (p.activeStages ?? ['SR']).length > 0);
+  // Baigtas = visi pasirinkti etapai faktiškai baigti (žr. isProjectFinished),
+  // ne tuščias activeStages — vidury proceso tai reiškia „niekas nedirbama".
+  const activeProjects = projects.filter(p => !p.archived && !p.paused && !isProjectFinished(p));
   const pausedProjects = projects.filter(p => !p.archived && p.paused);
-  const finishedProjects = projects.filter(p => !p.archived && !p.paused && (p.activeStages ?? ['SR']).length === 0);
+  const finishedProjects = projects.filter(p => !p.archived && !p.paused && isProjectFinished(p));
   const archivedProjects = projects.filter(p => p.archived);
 
   const alerts = buildAlerts(activeProjects);

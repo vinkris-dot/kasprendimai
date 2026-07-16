@@ -23,6 +23,13 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Dev apėjimas naršyklės patikroms be sesijos: veikia TIK development
+  // build'e ir tik su aiškiu NEXT_PUBLIC_DEV_NO_AUTH=1 (.env.local).
+  // Produkcijoje išsikompiliuoja į false; duomenis vis tiek saugo RLS.
+  if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEV_NO_AUTH === '1') {
+    return <>{children}</>;
+  }
+
   if (status === 'checking') return null;
   if (status === 'in') return <>{children}</>;
 

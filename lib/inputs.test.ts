@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getResultInputs, getInputStatus, getResultReadiness, getProjectResultIds, getUnlockPriorities, DEFAULT_RESULT_INPUTS } from './inputs';
+import { getResultInputs, getInputStatus, getResultReadiness, getProjectResultIds, getUnlockPriorities, getStageProcessInfo, isProjectFinished, DEFAULT_RESULT_INPUTS } from './inputs';
 import { createDefaultProject, DEFAULT_PARTS } from './defaultData';
 import { Project, ResultInput } from './types';
 
@@ -84,6 +84,12 @@ describe('getInputStatus', () => {
 });
 
 describe('getResultReadiness', () => {
+  it('SR: startuoja iš karto — 02/03/04/07 soft, tik užbaigimui', () => {
+    const p = makeProject();
+    expect(getResultReadiness(p, 'SR')).toMatchObject({ ready: true, missing: 4, hardMissing: 0, total: 4 });
+    markReceived(p, 'doc-02', 'doc-03', 'doc-04', 'doc-07');
+    expect(getResultReadiness(p, 'SR')).toMatchObject({ ready: true, missing: 0 });
+  });
   it('PP: soft įėjimai starto neblokuoja — galima pradėti, bet trūksta užbaigimui', () => {
     const p = makeProject();
     expect(getResultReadiness(p, 'PP')).toMatchObject({ ready: true, missing: 5, hardMissing: 0, total: 5 });
@@ -153,5 +159,79 @@ describe('proceso logika: TDP lygiagrečiai su SLD', () => {
     p.completedStages = ['PP', 'SLD', 'TDP'];
     p.activeStages = ['EKSPERTIZE'];
     expect(getResultReadiness(p, 'EKSPERTIZE').ready).toBe(true);
+  });
+});
+
+describe('TDP dalių seka: BD → SP → SA → SK → LVN', () => {
+  it('SK laukia SA (konstrukcijos po architektūros) ir 06', () => {
+    const p = makeProject({ selectedParts: { ...DEFAULT_PARTS, SP: true, SA: true, SK: true } });
+    p.completedStages = ['PP'];
+    p.activeStages = ['SLD', 'TDP'];
+    expect(getResultReadiness(p, 'SK').ready).toBe(false);
+    markReceived(p, 'doc-06');
+    expect(getResultReadiness(p, 'SK').ready).toBe(false); // dar trūksta SA
+    p.partStatuses = { SA: { startDate: '2026-03-01', endDate: '2026-03-15', completed: true, notes: '' } };
+    expect(getResultReadiness(p, 'SK').ready).toBe(true);
+  });
+  it('BD atsirakina baigus PP', () => {
+    const p = makeProject({ selectedParts: { ...DEFAULT_PARTS, BD: true } });
+    expect(getResultReadiness(p, 'BD').ready).toBe(false);
+    expect(getProjectResultIds(p)).toContain('BD');
+    p.completedStages = ['PP'];
+    p.activeStages = ['SLD', 'TDP'];
+    expect(getResultReadiness(p, 'BD').ready).toBe(true);
+  });
+});
+
+describe('getStageProcessInfo', () => {
+  const status = (startDate = '', endDate = '') => ({ startDate, endDate, completed: false, notes: '' });
+  it('PP: galima → dirbama → baigta', () => {
+    const p = makeProject();
+    expect(getStageProcessInfo(p, 'PP').state).toBe('galima'); // soft starto neblokuoja
+    p.stageStatuses = { PP: status('2026-02-01') };
+    expect(getStageProcessInfo(p, 'PP').state).toBe('dirbama');
+    p.stageStatuses = { PP: status('2026-02-01', '2026-03-01') };
+    expect(getStageProcessInfo(p, 'PP').state).toBe('baigta');
+  });
+  it('SLD: laukiama be PP+00+05+06; pridavus — priduota (ne dirbama)', () => {
+    const p = makeProject();
+    expect(getStageProcessInfo(p, 'SLD').state).toBe('laukiama');
+    p.completedStages = ['PP'];
+    markReceived(p, 'doc-00', 'doc-05', 'doc-06');
+    expect(getStageProcessInfo(p, 'SLD').state).toBe('galima');
+    p.stageStatuses = { SLD: status('2026-03-01') };
+    expect(getStageProcessInfo(p, 'SLD').state).toBe('priduota');
+  });
+  it('PP faktinė pabaiga atrakina SLD net kai completedStages išvalytas', () => {
+    const p = makeProject();
+    markReceived(p, 'doc-00', 'doc-05', 'doc-06');
+    p.stageStatuses = { PP: status('2026-02-01', '2026-03-01') };
+    p.activeStages = [];
+    p.completedStages = [];
+    expect(getStageProcessInfo(p, 'SLD').state).toBe('galima');
+  });
+});
+
+describe('isProjectFinished', () => {
+  const status = (startDate = '', endDate = '') => ({ startDate, endDate, completed: false, notes: '' });
+  it('tuščias activeStages vidury proceso ≠ baigtas projektas', () => {
+    const p = makeProject(); // SR, PP, SLD, TDP, SP, SA, EKSPERTIZE
+    p.stageStatuses = { SR: status('2026-01-01', '2026-02-01'), PP: status('2026-02-01', '2026-03-01') };
+    p.activeStages = [];
+    p.completedStages = []; // toggleStage konvencija baigus paskutinį aktyvų
+    expect(isProjectFinished(p)).toBe(false); // SLD/TDP/Ekspertizė nė nepradėti
+  });
+  it('baigtas, kai visi pasirinkti etapai turi faktinę pabaigą', () => {
+    const p = makeProject();
+    p.activeStages = [];
+    p.completedStages = [];
+    p.stageStatuses = {
+      SR: status('2026-01-01', '2026-02-01'),
+      PP: status('2026-02-01', '2026-03-01'),
+      SLD: status('2026-03-01', '2026-04-15'),
+      TDP: status('2026-03-01', '2026-05-01'),
+      EKSPERTIZE: status('2026-05-01', '2026-06-01'),
+    };
+    expect(isProjectFinished(p)).toBe(true);
   });
 });
