@@ -413,9 +413,9 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-y-2">
         <h1 className="text-2xl font-semibold text-slate-900">Projektai</h1>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-4">
         <DataSafety projects={projects} syncStatus={syncStatus} />
         <span className="text-slate-200">|</span>
         <Link href="/savane" className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1.5 font-medium">
@@ -761,7 +761,7 @@ export default function Dashboard() {
 
           {/* Project cards */}
           {viewMode === 'cards' && (
-          <div className="grid gap-4">
+          <div className="grid grid-cols-1 gap-4">
             {visibleActive.map(project => {
               const stages = stageLabels(project);
               const progress = progressPercent(project);
@@ -1133,7 +1133,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-2 text-sm font-semibold text-amber-600 uppercase tracking-wider mb-4">
                 <span>⏸</span> Pristabdyti ({pausedProjects.length})
               </div>
-              <div className="grid gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 {pausedProjects.filter(p => {
                   if (search.trim()) {
                     const q = search.toLowerCase();
@@ -1142,10 +1142,10 @@ export default function Dashboard() {
                   return true;
                 }).map(project => (
                   <div key={project.id} className="bg-amber-50 rounded-xl border border-amber-200 overflow-hidden">
-                    <div className="px-5 py-2.5 flex items-center justify-between gap-3">
+                    <div className="px-5 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-amber-600 shrink-0">⏸</span>
-                        <Link href={`/projects/${project.id}`} className="font-semibold text-slate-700 hover:text-slate-900 truncate">{projectLabel(project)}</Link>
+                        <Link href={`/projects/${project.id}`} className="font-semibold text-slate-700 hover:text-slate-900 sm:truncate">{projectLabel(project)}</Link>
                         {project.name !== projectLabel(project) && <span className="text-sm text-slate-500 truncate hidden sm:block">{project.name}</span>}
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
@@ -1172,7 +1172,7 @@ export default function Dashboard() {
                 Baigti projektai ({finishedProjects.length})
               </button>
               {showFinished && (
-                <div className="grid gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   {finishedProjects.filter(p => {
                     if (search.trim()) {
                       const q = search.toLowerCase();
@@ -1239,7 +1239,7 @@ export default function Dashboard() {
                 Archyvas ({archivedProjects.length})
               </button>
               {showArchived && (
-                <div className="grid gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   {archivedProjects.map(project => (
                     <Link
                       key={project.id}

@@ -711,8 +711,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   </div>
                 </div>
 
-                {/* Two-column layout */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Two-column layout (stacked on mobile) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Left: dates + tasks */}
                   <div>
                     {/* Planned dates + forecast */}
@@ -833,7 +833,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           const pStatus = (project.partStatuses ?? {})[p.id];
                           const done = !!pStatus?.endDate;
                           return (
-                            <div key={p.id} className={`flex items-center gap-3 rounded-lg px-2.5 py-2 border transition-all ${done ? 'bg-green-50 border-green-100' : 'bg-slate-50 border-slate-100'}`}>
+                            <div key={p.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2.5 py-2 border transition-all ${done ? 'bg-green-50 border-green-100' : 'bg-slate-50 border-slate-100'}`}>
                               {/* Done toggle */}
                               <button
                                 onClick={() => updateProject(project.id, {
@@ -847,7 +847,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               <span className={`text-xs font-semibold w-8 shrink-0 ${done ? 'text-green-600' : 'text-indigo-700'}`}>{p.label}</span>
                               {/* Planned dates */}
                               {planned && (
-                                <span className={`text-xs flex-1 ${done ? 'text-green-500 line-through' : 'text-slate-400'}`}>
+                                <span className={`text-xs flex-1 whitespace-nowrap ${done ? 'text-green-500 line-through' : 'text-slate-400'}`}>
                                   {formatDate(planned.startDate)} → {formatDate(planned.endDate)}
                                 </span>
                               )}
@@ -866,7 +866,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           const planned = customPartDates[c.id];
                           const done = !!c.endDate;
                           return (
-                            <div key={c.id} className={`flex items-center gap-3 rounded-lg px-2.5 py-2 border transition-all ${done ? 'bg-green-50 border-green-100' : 'bg-indigo-50/40 border-indigo-100'}`}>
+                            <div key={c.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2.5 py-2 border transition-all ${done ? 'bg-green-50 border-green-100' : 'bg-indigo-50/40 border-indigo-100'}`}>
                               <button
                                 onClick={() => updateProject(project.id, { customParts: customParts.map(x => x.id === c.id ? { ...x, endDate: done ? '' : new Date().toISOString().slice(0, 10) } : x) })}
                                 className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${done ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 hover:border-indigo-400'}`}
@@ -876,7 +876,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               <span className={`text-xs font-semibold shrink-0 max-w-[120px] truncate ${done ? 'text-green-600' : 'text-indigo-700'}`} title={c.name}>{c.name}</span>
                               <span className="text-[10px] text-indigo-400 shrink-0">⇄ {c.weeks} sav.</span>
                               {planned && (
-                                <span className={`text-xs flex-1 ${done ? 'text-green-500 line-through' : 'text-slate-400'}`}>
+                                <span className={`text-xs flex-1 whitespace-nowrap ${done ? 'text-green-500 line-through' : 'text-slate-400'}`}>
                                   {formatDate(planned.startDate)} → {formatDate(planned.endDate)}
                                 </span>
                               )}
