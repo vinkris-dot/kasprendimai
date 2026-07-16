@@ -10,6 +10,7 @@ import { getProjectResultIds, getResultReadiness } from '@/lib/inputs';
 import { generateAutoTasks, getManualTaskItems, TaskItem } from '@/lib/tasks';
 import { PARALLEL_TDP_PARTS } from '@/lib/schedule';
 import InputsTab from '@/app/components/InputsTab';
+import { todayLT } from '@/lib/dates';
 
 const BYLA_SECTIONS: { id: string; label: string; partKey: string }[] = [
   { id: 'PP',  label: 'PP – Projektiniai pasiūlymai', partKey: 'PP' },
@@ -553,7 +554,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               )}
             </div>
             {project.deadline && (() => {
-              const today = new Date().toISOString().slice(0, 10);
+              const today = todayLT();
               const overdue = project.deadline < today && currentStages.length > 0;
               return (
                 <div className={`border rounded-xl px-4 py-2.5 mb-2 ${overdue ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
@@ -764,7 +765,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   const ballMembers = [...new Set(stTasks.map(t => t.assignee).filter(Boolean))] as TeamMemberId[];
                   const ballNames = ballMembers.map(id => TEAM_MEMBERS.find(m => m.id === id)?.name ?? id).join(', ');
                   const formOpen = stageTaskForm?.stage === stage.id;
-                  const todayStr = new Date().toISOString().slice(0, 10);
+                  const todayStr = todayLT();
                   return (
                     <div className="mb-4 bg-sky-50/70 border border-sky-100 rounded-lg p-3">
                       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-1">
@@ -953,7 +954,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               {/* Done toggle */}
                               <button
                                 onClick={() => updateProject(project.id, {
-                                  partStatuses: { ...(project.partStatuses ?? {}), [p.id]: { startDate: pStatus?.startDate ?? '', completed: pStatus?.completed ?? false, notes: pStatus?.notes ?? '', endDate: done ? '' : new Date().toISOString().slice(0, 10) } }
+                                  partStatuses: { ...(project.partStatuses ?? {}), [p.id]: { startDate: pStatus?.startDate ?? '', completed: pStatus?.completed ?? false, notes: pStatus?.notes ?? '', endDate: done ? '' : todayLT() } }
                                 })}
                                 className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${done ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 hover:border-indigo-400'}`}
                               >
@@ -984,7 +985,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           return (
                             <div key={c.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2.5 py-2 border transition-all ${done ? 'bg-green-50 border-green-100' : 'bg-indigo-50/40 border-indigo-100'}`}>
                               <button
-                                onClick={() => updateProject(project.id, { customParts: customParts.map(x => x.id === c.id ? { ...x, endDate: done ? '' : new Date().toISOString().slice(0, 10) } : x) })}
+                                onClick={() => updateProject(project.id, { customParts: customParts.map(x => x.id === c.id ? { ...x, endDate: done ? '' : todayLT() } : x) })}
                                 className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${done ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 hover:border-indigo-400'}`}
                               >
                                 {done && <span className="text-xs">✓</span>}
@@ -1061,7 +1062,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     </div>
                   )}
                   <button
-                    onClick={() => updateProject(project.id, { customParts: customParts.map(x => x.id === c.id ? { ...x, endDate: done ? '' : new Date().toISOString().slice(0, 10) } : x) })}
+                    onClick={() => updateProject(project.id, { customParts: customParts.map(x => x.id === c.id ? { ...x, endDate: done ? '' : todayLT() } : x) })}
                     className={`text-xs px-3 py-2 rounded-lg font-medium transition-colors ${done ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
                   >{done ? '↩ Atžymėti' : '✓ Baigti'}</button>
                   {done && (
@@ -1436,7 +1437,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           ) : (
             <div className="space-y-3">
               {(project.motyvuotiAtsakymai ?? []).map(item => {
-                const today = new Date().toISOString().slice(0, 10);
+                const today = todayLT();
                 const terminas = item.terminas ?? item.terminasPataisymui ?? item.terminasAtsakymui;
                 const terminasOverdue = terminas && !item.atsakyta && terminas < today;
                 const isEditing = editingAtsakymasId === item.id;

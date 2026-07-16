@@ -1,5 +1,6 @@
 import { Project, TeamMemberId } from './types';
 import { projectLabel } from './defaultData';
+import { todayLT, addDaysStr } from './dates';
 
 export interface TaskItem {
   key: string;           // unique per-project: `${projectId}:${taskKey}`
@@ -227,16 +228,12 @@ export type TaskGroups = {
 };
 
 export function groupByUrgency(tasks: TaskItem[]): TaskGroups {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const todayStr = now.toISOString().slice(0, 10);
-
-  // End of this week (Sunday)
-  const weekEnd = new Date(now);
-  const dayOfWeek = now.getDay(); // 0=Sun
+  // Viskas lyginama YYYY-MM-DD eilutėmis pagal Lietuvos laiką — anksčiau UTC data
+  // naktį (00–03 val.) persislinkdavo per dieną, o savaitės riba maišė juostas.
+  const todayStr = todayLT();
+  const dayOfWeek = new Date(todayStr + 'T00:00:00Z').getUTCDay(); // 0=Sun
   const daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-  weekEnd.setDate(now.getDate() + daysToSunday);
-  weekEnd.setHours(23, 59, 59, 999);
+  const weekEndStr = addDaysStr(todayStr, daysToSunday);
 
   const overdue: TaskItem[] = [];
   const today: TaskItem[] = [];
@@ -250,8 +247,7 @@ export function groupByUrgency(tasks: TaskItem[]): TaskGroups {
     }
     if (t.dueDate < todayStr) { overdue.push(t); continue; }
     if (t.dueDate === todayStr) { today.push(t); continue; }
-    const d = new Date(t.dueDate);
-    if (d <= weekEnd) { thisWeek.push(t); continue; }
+    if (t.dueDate <= weekEndStr) { thisWeek.push(t); continue; }
     later.push(t);
   }
 

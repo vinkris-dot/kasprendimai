@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Project, StageId, SelectedParts, MotyvuotasAtsakymas, ProjektavimoUzduotis } from './types';
 import { createDefaultProject, calcTargetDate, calcEffectiveTargetDate, validStageIds, DEFAULT_DOKUMENTAI, DEFAULT_PP_BYLA, DEFAULT_STAGE_ASSIGNEES } from './defaultData';
 import { supabase } from './supabase';
+import { todayLT } from './dates';
 
 const STORAGE_KEY = 'openclaw_projects';
 
@@ -374,7 +375,7 @@ export function useProjects() {
         if (p.id !== projectId) return p;
         const current = p.activeStages ?? ['SR'];
         const completed = p.completedStages ?? [];
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayLT();
         const stageStatuses = p.stageStatuses ?? {};
         let updatedProject: Project;
         if (current.includes(stage)) {
@@ -436,7 +437,7 @@ export function useProjects() {
     setProjects(prev => {
       const updated = prev.map(p => {
         if (p.id !== projectId) return p;
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayLT();
         const stageStatuses = { ...(p.stageStatuses ?? {}) };
         let pakartotinisRounds = p.pakartotinisRounds ?? 0;
         for (const sid of (p.activeStages ?? [])) {

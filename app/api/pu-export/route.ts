@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { todayLT } from '@/lib/dates';
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   WidthType, BorderStyle, AlignmentType, UnderlineType,
@@ -189,7 +190,7 @@ function underlinePara(label: string) {
 
 export async function POST(req: NextRequest) {
   const d: PUData = await req.json();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLT();
 
   const doc = new Document({
     sections: [{

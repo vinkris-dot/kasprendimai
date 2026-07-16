@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
 import { PROJECT_PARTS, DEFAULT_PARTS, calcTargetDate, formatDate } from '@/lib/defaultData';
 import { SelectedParts, PartId, ProjektavimoUzduotis, DEFAULT_PU } from '@/lib/types';
+import { todayLT } from '@/lib/dates';
 
 function suggestProjectNumber(existingNumbers: (string | undefined)[]): string {
   const now = new Date();
@@ -73,7 +74,7 @@ export default function NewProject() {
   const [address, setAddress] = useState('');
   const [client, setClient] = useState('');
   const [clientEmail, setClientEmail] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(todayLT());
   const [deadline, setDeadline] = useState('');
   const [isPriority, setIsPriority] = useState(false);
   const [parts, setParts] = useState<SelectedParts>({ ...DEFAULT_PARTS });

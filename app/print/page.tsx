@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
 import { STAGES, formatDate, calcStageDates, projectLabel } from '@/lib/defaultData';
 import { Project, StageId } from '@/lib/types';
+import { todayLT } from '@/lib/dates';
 
 function getActiveStageIds(project: Project): StageId[] {
   const sp = project.selectedParts;
@@ -49,7 +50,7 @@ export default function PrintAllPage() {
       <div className="max-w-4xl mx-auto px-8 py-10 text-slate-900">
         <div className="flex items-baseline justify-between mb-8 border-b border-slate-300 pb-4">
           <h1 className="text-2xl font-bold">KA sprendimai — Projektų sąrašas</h1>
-          <p className="text-sm text-slate-400">{formatDate(new Date().toISOString().slice(0, 10))}</p>
+          <p className="text-sm text-slate-400">{formatDate(todayLT())}</p>
         </div>
 
         {active.length === 0 && (

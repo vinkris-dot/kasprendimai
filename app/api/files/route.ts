@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { isAllowedPath } from '@/lib/serverPaths';
+
+// SAUGIKLIS: atiduodami TIK projektų aplankų failai (žr. lib/serverPaths.ts).
+// Anksčiau maršrutas atiduodavo bet kokį disko failą pagal kliento kelią.
 
 export async function GET(req: NextRequest) {
   const filePath = req.nextUrl.searchParams.get('path');
   if (!filePath) return NextResponse.json({ error: 'Nėra kelio' }, { status: 400 });
+  if (!isAllowedPath(filePath)) {
+    return NextResponse.json({ error: 'Kelias už projektų aplanko ribų' }, { status: 403 });
+  }
 
   if (!fs.existsSync(filePath)) {
     return NextResponse.json({ error: 'Failas nerastas' }, { status: 404 });

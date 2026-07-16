@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Project, StageId } from './types';
 import { STAGES, calcStageDates } from './defaultData';
 import { getAllTasks } from './tasks';
+import { todayLT } from './dates';
 
 const STORAGE_KEY = 'ka_last_notified';
 
@@ -24,7 +25,7 @@ function getOverdueCount(projects: Project[]): number {
 }
 
 function getOverdueTaskCount(projects: Project[]): number {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLT();
   return getAllTasks(projects).filter(t => t.dueDate && t.dueDate < today).length;
 }
 
@@ -35,7 +36,7 @@ export function useNotifications(projects: Project[], loaded: boolean) {
 
     // Only notify once per day
     const lastNotified = localStorage.getItem(STORAGE_KEY);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLT();
     if (lastNotified === today) return;
 
     const overdueStages = getOverdueCount(projects);

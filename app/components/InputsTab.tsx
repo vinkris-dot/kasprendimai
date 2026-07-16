@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Project, ResultInput, InputStatus, InputKind, DocumentItem } from '@/lib/types';
 import { PROJECT_PARTS, STAGES } from '@/lib/defaultData';
+import { todayLT } from '@/lib/dates';
 import {
   getResultInputs, getInputStatus, getResultReadiness, getProjectResultIds,
   getUnlockPriorities, INPUT_KIND_META, DEFAULT_RESULT_INPUTS,
@@ -46,7 +47,7 @@ export default function InputsTab({ project, updateProject, onOpenTab }: Props) 
 
     if (input.docId) {
       // Dokumentų būsena gyvena Dokumentai sąraše — keičiam ten (vienas šaltinis)
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayLT();
       const patch = (d: DocumentItem) => d.id !== input.docId ? d : {
         ...d,
         received: next === 'yra',

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { todayLT } from '@/lib/dates';
 
 // AI asistentas: laisva lietuviška komanda → struktūruoti veiksmai projektams.
 // Veiksmai TIK pasiūlomi — taiko klientas po Kristinos patvirtinimo.
@@ -126,6 +127,20 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+// Paprastas dažnio limitas pagal IP (in-memory; serverless instancijoje apytikslis,
+// bet stabdo masinį kreditų deginimą, kol nėra prisijungimo).
+const RATE_LIMIT = 20; // užklausų per valandą vienam IP
+const rateLog = new Map<string, number[]>();
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const windowStart = now - 60 * 60 * 1000;
+  const hits = (rateLog.get(ip) ?? []).filter(t => t > windowStart);
+  hits.push(now);
+  rateLog.set(ip, hits);
+  if (rateLog.size > 1000) rateLog.clear(); // apsauga nuo atminties augimo
+  return hits.length > RATE_LIMIT;
+}
+
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -134,12 +149,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  if (rateLimited(ip)) {
+    return NextResponse.json({ error: 'Per daug užklausų — pabandykite po valandos.' }, { status: 429 });
+  }
+
   const { command, projects } = (await req.json()) as { command: string; projects: ProjectSnapshot[] };
   if (!command?.trim() || !Array.isArray(projects)) {
     return NextResponse.json({ error: 'Trūksta komandos arba projektų sąrašo.' }, { status: 400 });
   }
+  if (command.length > 4000 || projects.length > 200) {
+    return NextResponse.json({ error: 'Užklausa per didelė.' }, { status: 400 });
+  }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLT();
   const projectList = projects
     .map(p => `- id:${p.id} | ${p.label}${p.number ? ` (${p.number})` : ''}${p.client ? ` | užsakovas: ${p.client}` : ''} | aktyvūs etapai: ${p.activeStages.join(', ') || '—'}${p.paused ? ' | PRISTABDYTAS' : ''}${p.missingDocs ? ` | trūksta ${p.missingDocs} dok.` : ''}`)
     .join('\n');

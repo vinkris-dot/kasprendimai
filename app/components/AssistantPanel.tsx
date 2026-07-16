@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Project, StageId, TeamMemberId, ManualTask } from '@/lib/types';
 import { STAGES, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
+import { todayLT } from '@/lib/dates';
 
 // AI asistentas: laisva komanda → pasiūlyti veiksmai → Kristina patvirtina → taikoma.
 
@@ -18,7 +19,7 @@ interface Props {
   finishProject: (projectId: string) => void;
 }
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
+const TODAY = () => todayLT();
 
 export default function AssistantPanel({ projects, updateProject, toggleStage, finishProject }: Props) {
   const [open, setOpen] = useState(false);

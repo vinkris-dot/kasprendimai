@@ -11,6 +11,7 @@ import AssistantPanel from '@/app/components/AssistantPanel';
 import { getUnlockPriorities } from '@/lib/inputs';
 import DataSafety from '@/app/components/DataSafety';
 import { useNotifications } from '@/lib/useNotifications';
+import { todayLT } from '@/lib/dates';
 
 function getActiveStageIds(project: Project) {
   const sp = project.selectedParts;
@@ -714,7 +715,7 @@ export default function Dashboard() {
                   {visibleActive.map(project => {
                     const rowStages = stageLabels(project);
                     const rowOverdue = overdueProjectIds.has(project.id);
-                    const todayIso = new Date().toISOString().slice(0, 10);
+                    const todayIso = todayLT();
                     const dlOverdue = !!project.deadline && project.deadline < todayIso;
                     return (
                       <tr
@@ -865,7 +866,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       {project.deadline && (() => {
-                        const today = new Date().toISOString().slice(0, 10);
+                        const today = todayLT();
                         const dlOverdue = project.deadline < today;
                         return (
                           <div className={`mt-1 text-xs flex items-center gap-1 ${dlOverdue ? 'text-red-500' : 'text-slate-500'}`}>
@@ -945,7 +946,7 @@ export default function Dashboard() {
                           <span className="text-xs text-slate-500">Aktyvūs etapai — nuo šiandien?</span>
                           <button onClick={e => {
                             e.preventDefault();
-                            const today = new Date().toISOString().slice(0, 10);
+                            const today = todayLT();
                             const newStatuses = { ...(project.stageStatuses ?? {}) };
                             for (const sid of (project.activeStages ?? [])) {
                               newStatuses[sid as StageId] = { ...(newStatuses[sid as StageId] ?? {}), startDate: today, endDate: '' } as import('@/lib/types').StageStatus;

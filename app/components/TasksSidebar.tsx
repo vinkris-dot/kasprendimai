@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Project, ManualTask, TeamMemberId } from '@/lib/types';
 import { TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { getAllTasks, groupByUrgency, TaskItem } from '@/lib/tasks';
+import { todayLT } from '@/lib/dates';
 
 // ── Personal notes (localStorage) ──────────────────────────────
 interface Note {
@@ -73,7 +74,7 @@ function TaskRow({ task, onDone, onDelete, onSetDueDate, hideProject }: {
         <div className="relative mt-1 inline-flex" onClick={e => { (e.currentTarget.querySelector('input') as HTMLInputElement)?.showPicker?.(); }}>
           <span className={`text-[10px] px-1.5 py-0.5 rounded border cursor-pointer ${
             task.dueDate
-              ? task.dueDate < new Date().toISOString().slice(0, 10) ? 'border-red-200 bg-red-50 text-red-500' : 'border-slate-200 bg-white text-slate-400'
+              ? task.dueDate < todayLT() ? 'border-red-200 bg-red-50 text-red-500' : 'border-slate-200 bg-white text-slate-400'
               : 'border-dashed border-slate-200 text-slate-300'
           }`}>
             {task.dueDate ? `iki ${task.dueDate}` : 'iki...'}
@@ -159,7 +160,7 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
   function markDone(t: TaskItem) {
     const project = projects.find(p => p.id === t.projectId);
     if (!project) return;
-    updateProject(t.projectId, { taskStatuses: { ...(project.taskStatuses ?? {}), [t.taskKey]: { ...(project.taskStatuses?.[t.taskKey] ?? {}), doneAt: new Date().toISOString().slice(0, 10) } } });
+    updateProject(t.projectId, { taskStatuses: { ...(project.taskStatuses ?? {}), [t.taskKey]: { ...(project.taskStatuses?.[t.taskKey] ?? {}), doneAt: todayLT() } } });
   }
 
   function deleteTask(t: TaskItem) {

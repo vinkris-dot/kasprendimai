@@ -3,6 +3,7 @@
 import { useRef } from 'react';
 import { Project } from '@/lib/types';
 import { SyncStatus } from '@/lib/useProjects';
+import { todayLT } from '@/lib/dates';
 
 /**
  * Duomenų saugumo juosta: sinchronizacijos būsena + atsarginė kopija (JSON).
@@ -15,7 +16,7 @@ export default function DataSafety({ projects, syncStatus }: { projects: Project
     const blob = new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `ka-projektai-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `ka-projektai-${todayLT()}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   }

@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { todayLT } from '@/lib/dates';
 
 const pExecFile = promisify(execFile);
 
@@ -70,7 +71,13 @@ export async function POST(req: NextRequest) {
 
     const basePath = getBasePath();
     const folderName = saugusVardas(address);
+    if (!folderName || folderName.includes('..')) {
+      return NextResponse.json({ error: 'Netinkamas adresas aplanko vardui' }, { status: 400 });
+    }
     const projectPath = path.join(basePath, folderName);
+    if (!path.resolve(projectPath).startsWith(path.resolve(basePath) + path.sep)) {
+      return NextResponse.json({ error: 'Kelias už projektų aplanko ribų' }, { status: 400 });
+    }
     const standartai = path.join(basePath, '_STANDARTAI');
     const tuscia = path.join(standartai, '02_Sablonai', 'Tuscia_struktura', 'Adresas g. 0, Miestas');
 
@@ -109,7 +116,7 @@ export async function POST(req: NextRequest) {
     const duomFile = path.join(projectPath, '00_projekto_duomenys.json');
     if (!fs.existsSync(duomFile)) {
       const { gatve, miestas, sav, vietove } = parseAdresas(address);
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayLT();
       const pu = body.pu ?? {};
       const duomenys: Record<string, string | null> = {
         _paaiskinimas: 'Sukurta iš KA sprendimai programos. null = nežinoma (šablonuose liks geltona PILDYTI). Papildyk ir paleisk: node _STANDARTAI/04_Helpers/uzpildyti.js "' + folderName + '"',

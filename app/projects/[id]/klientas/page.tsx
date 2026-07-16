@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
 import { STAGES, formatDate, calcStageDates, calcEffectiveStageDates } from '@/lib/defaultData';
 import { StageId } from '@/lib/types';
+import { todayLT } from '@/lib/dates';
 
 function getActiveStageIds(selectedParts: import('@/lib/types').SelectedParts): StageId[] {
   const show: StageId[] = ['SR'];
@@ -72,7 +73,7 @@ export default function KlientasPage({ params }: { params: Promise<{ id: string 
   const plannedDates = calcStageDates(project.startDate, selectedParts, project.customParts ?? []);
   const effectiveDates = calcEffectiveStageDates(project.startDate, selectedParts, project.stageStatuses ?? {}, project.customParts ?? []);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLT();
 
   // Find "current" stage to highlight
   const currentStageName = currentStages.length > 0
