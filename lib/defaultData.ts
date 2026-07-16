@@ -74,7 +74,7 @@ export const PROJECT_PARTS: PartConfig[] = [
   {
     id: 'SK',
     label: 'SK',
-    description: 'Sklypo komunikacijos',
+    description: 'Konstrukcijų dalis',
     durationDays: 42, // 6 sav.
     group: 'tdp',
   },
@@ -338,7 +338,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
 
 export const DEFAULT_STAGE_ASSIGNEES: Partial<Record<import('./types').StageId, import('./types').TeamMemberId[]>> = {
   SR: ['NR', 'KV'], // KV — pirminė analizė SR etape
-  PP: ['KV', 'NR'],
+  PP: ['KV', 'LL', 'NR'], // užbaigimas: LL — brėžiniai, NR — AR ir kiti dokumentai
   PP_VIESIMAS: ['NR'],
   IP: ['NR'],
   SLD: ['NR'],

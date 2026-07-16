@@ -259,10 +259,10 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
               {autoByProject.size > 0 && (
                 <div className="mt-2 pt-3 border-t border-slate-100">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    📂 Dokumentų ruoša pagal projektą
+                    📂 Automatinės užduotys pagal projektą
                   </p>
                   <p className="text-[10px] text-slate-300 mb-2 leading-snug">
-                    Automatiškai iš trūkstamų dokumentų. Uždėk terminą — užduotis pakils į priminimus.
+                    Iš trūkstamų dokumentų ir etapų eigos. Uždėk terminą — užduotis pakils į priminimus.
                   </p>
                   {[...autoByProject.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name, 'lt')).map(([pid, grp]) => (
                     <div key={pid} className="border-b border-slate-100 last:border-0">

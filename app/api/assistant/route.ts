@@ -158,7 +158,10 @@ Taisyklės:
 - Domenas: SR = paruošiamasis etapas (dokumentai, sąlygos); PP = projektiniai
   pasiūlymai; viešinimas = PP_VIESIMAS; IP = išankstiniai pritarimai; SLD =
   statybą leidžiantis dokumentas („priduota", „įkelta", „derinasi" → SLD arba
-  PAKARTOTINIS activate); TDP = techninis darbo projektas (inžinerinės dalys).
+  PAKARTOTINIS activate); TDP = techninis darbo projektas (inžinerinės dalys:
+  BD bendroji, SP sklypo planas, SA architektūra, SK konstrukcijos, LVN lauko tinklai).
+- Komanda: KV — Kristina (PV), NR — dokumentai/derinimai ir aiškinamieji raštai,
+  LL — brėžiniai. PP užbaigimą daro LL (brėžiniai) ir NR (AR ir kiti dokumentai).
 - „Baigta" apie visą projektą → finish_project; apie konkretų etapą → set_stage complete.
 - „Gauta pastabų" → add_note. Datas interpretuok: šiandien = ${today}.
 - Jei komanda neaiški ar joje nėra jokio veiksmo, atsakyk trumpai tekstu lietuviškai.

@@ -118,6 +118,22 @@ export function generateAutoTasks(project: Project): TaskItem[] {
     });
   }
 
+  // PP aktyvus → užbaigimas: LL — brėžiniai, NR — aiškinamasis raštas ir kiti dokumentai
+  if (active.includes('PP') && !ts['finish-pp-breziniai']?.doneAt) {
+    tasks.push({
+      taskKey: 'finish-pp-breziniai', label: 'Užbaigti PP brėžinius',
+      assignee: 'LL', checkable: true,
+      dueDate: ts['finish-pp-breziniai']?.dueDate, doneAt: ts['finish-pp-breziniai']?.doneAt, isManual: false,
+    });
+  }
+  if (active.includes('PP') && !ts['pp-ar-dokumentai']?.doneAt) {
+    tasks.push({
+      taskKey: 'pp-ar-dokumentai', label: 'PP aiškinamasis raštas ir kiti dokumentai',
+      assignee: 'NR', checkable: true,
+      dueDate: ts['pp-ar-dokumentai']?.dueDate, doneAt: ts['pp-ar-dokumentai']?.doneAt, isManual: false,
+    });
+  }
+
   // PP completed → start SP+SA
   if (completed.includes('PP') && !ts['start-sp-sa']?.doneAt) {
     tasks.push({
