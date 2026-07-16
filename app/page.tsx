@@ -418,10 +418,6 @@ export default function Dashboard() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-4">
         <DataSafety projects={projects} syncStatus={syncStatus} />
         <span className="text-slate-200">|</span>
-        <Link href="/savane" className="text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1.5 font-medium">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
-          Savaitė
-        </Link>
         <Link href="/print" target="_blank" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
           Spausdinti sąrašą
