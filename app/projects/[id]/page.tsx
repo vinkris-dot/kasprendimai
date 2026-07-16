@@ -232,12 +232,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectName: project!.name,
-          parts: { PP: selectedParts.PP, SLD: selectedParts.SLD, TDP: selectedParts.TDP },
+          address: project!.address || project!.name,
+          client: project!.client,
+          projectNumber: project!.projectNumber,
+          parts: selectedParts,
+          customParts: (project!.customParts ?? []).map(c => c.name),
+          pu: project!.pu,
         }),
       });
       const data = await res.json();
       if (!res.ok) { alert(`Klaida: ${data.error}`); setFolderStatus('error'); return; }
+      if (data.uzpildyta > 0 && !data.jauBuvo) {
+        alert(`Aplankas sukurtas: ${data.path}\nUžpildyta šablonų peržiūrai: ${data.uzpildyta} (žr. _PARUOSTA_PERZIURAI)`);
+      }
       setFolderStatus('done');
       setTimeout(() => setFolderStatus('idle'), 3000);
     } catch {

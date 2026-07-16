@@ -115,6 +115,20 @@ export default function NewProject() {
     e.preventDefault();
     if (!name || !address || !client || !startDate) return;
     const project = addProject({ name, address, client, clientEmail, startDate, selectedParts: parts, pu: showPU ? pu : undefined, projectNumber: projectNumber.trim() || suggested, deadline: deadline || undefined, priority: isPriority });
+    // Kompiuterio aplankas pagal firmos standartą + šablonų užpildymas (veikia tik lokaliai;
+    // Vercel grąžina 501 ir tyliai praleidžiama — aplanką galima sukurti vėliau mygtuku).
+    fetch('/api/create-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        address,
+        client,
+        projectNumber: projectNumber.trim() || suggested,
+        parts,
+        pu: showPU ? pu : undefined,
+      }),
+    }).catch(() => {});
     router.push(`/projects/${project.id}`);
   }
 
