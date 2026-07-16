@@ -616,13 +616,15 @@ export default function Dashboard() {
                       </p>
                       <div className="space-y-2">
                         {dayPriorities.map((u, i) => (
-                          <Link key={i} href={`/projects/${u.projectId}#iejimai`} className="flex items-center justify-between gap-3 hover:opacity-80 transition-opacity">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="shrink-0" title={INPUT_KIND_META[u.input.kind].label}>{INPUT_KIND_META[u.input.kind].icon}</span>
-                              <span className="text-sm font-medium text-slate-800 shrink-0">{u.input.label}</span>
-                              <span className="text-xs text-slate-500 truncate">{u.projectName}</span>
+                          <Link key={i} href={`/projects/${u.projectId}#iejimai`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 hover:opacity-80 transition-opacity">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+                              <span className="shrink-0 text-[10px] font-medium text-yellow-800 bg-white border border-yellow-200 rounded-full px-1.5 py-0.5">
+                                {INPUT_KIND_META[u.input.kind].icon} {u.input.kind === 'info' ? 'info' : INPUT_KIND_META[u.input.kind].label}
+                              </span>
+                              <span className="text-sm font-medium text-slate-800">{u.input.label}</span>
+                              <span className="text-xs text-slate-500 truncate max-w-full">{u.projectName}</span>
                             </div>
-                            <span className="text-xs text-yellow-700 font-medium shrink-0">
+                            <span className="text-xs text-yellow-700 font-medium shrink-0 ml-auto">
                               atrakina {u.unlocks.length}: {u.unlocks.join(', ')}
                             </span>
                           </Link>

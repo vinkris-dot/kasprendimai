@@ -48,8 +48,8 @@ function AssigneeBadge({ id }: { id?: TeamMemberId }) {
   );
 }
 
-function TaskRow({ task, onDone, onDelete, onSetDueDate }: {
-  task: TaskItem; onDone: () => void; onDelete?: () => void; onSetDueDate: (date: string) => void;
+function TaskRow({ task, onDone, onDelete, onSetDueDate, hideProject }: {
+  task: TaskItem; onDone: () => void; onDelete?: () => void; onSetDueDate: (date: string) => void; hideProject?: boolean;
 }) {
   return (
     <div className="flex items-start gap-2 py-2 border-b border-slate-100 last:border-0 group">
@@ -59,12 +59,14 @@ function TaskRow({ task, onDone, onDelete, onSetDueDate }: {
         }`}
       />
       <div className="flex-1 min-w-0">
+        {!hideProject && (
         <div className="flex items-center gap-1.5">
           <AssigneeBadge id={task.assignee} />
           <Link href={`/projects/${task.projectId}`} className="text-[10px] font-medium text-slate-400 hover:text-slate-600 truncate max-w-[120px]">
             {task.projectName}
           </Link>
         </div>
+        )}
         <p className={`text-xs mt-0.5 leading-snug ${task.checkable ? 'text-slate-700' : 'text-slate-400'}`}>
           {task.label}{task.sub && <span className="text-slate-400"> — {task.sub}</span>}
         </p>
@@ -120,8 +122,25 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
 
   const allTasks = getAllTasks(projects);
   const groups = groupByUrgency(allTasks);
+  // Greitas priminimas: vėluoja + šiandien + ši savaitė + rankinės be termino.
+  // Automatinės dokumentų užduotys be termino — atskirai, suskleistos pagal projektą.
+  const laterManual = groups.later.filter(t => t.isManual);
+  const laterAuto = groups.later.filter(t => !t.isManual);
+  const autoByProject = laterAuto.reduce((acc, t) => {
+    (acc.get(t.projectId) ?? acc.set(t.projectId, { name: t.projectName, tasks: [] }).get(t.projectId)!).tasks.push(t);
+    return acc;
+  }, new Map<string, { name: string; tasks: TaskItem[] }>());
+  const reminderCount = groups.overdue.length + groups.today.length + groups.thisWeek.length + laterManual.length;
   const totalPending = allTasks.length;
   const pendingNotes = notes.filter(n => !n.done).length;
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  function toggleProject(id: string) {
+    setExpandedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   // Only one panel open at a time
   function openTasks() {
@@ -183,9 +202,9 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
-          {totalPending > 0 && (
+          {reminderCount > 0 && (
             <span className={`text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center ${groups.overdue.length > 0 ? 'bg-red-500 text-white' : 'bg-amber-400 text-white'}`}>
-              {totalPending > 99 ? '99+' : totalPending}
+              {reminderCount > 99 ? '99+' : reminderCount}
             </span>
           )}
           <span className="text-[9px] font-semibold uppercase tracking-wider [writing-mode:vertical-rl] rotate-180">Užduotys</span>
@@ -211,7 +230,7 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
       {/* ── Tasks panel ── */}
       <div className={`fixed top-0 right-0 h-full w-80 bg-white border-l border-slate-200 shadow-xl z-30 flex flex-col transition-transform duration-200 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900 text-sm">Užduotys · {totalPending}</h2>
+          <h2 className="font-semibold text-slate-900 text-sm">Užduotys{reminderCount > 0 ? ` · ${reminderCount}` : ''}</h2>
           <button onClick={onToggle} className="text-slate-400 hover:text-slate-700 transition-colors p-1">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -228,10 +247,41 @@ export default function TasksSidebar({ projects, open, onToggle, updateProject }
             </div>
           ) : (
             <>
+              {reminderCount === 0 && (
+                <p className="text-xs text-slate-400 text-center py-3 mb-2 bg-slate-50 rounded-lg">🎉 Skubių priminimų nėra</p>
+              )}
               <TaskGroup label="🔴 Vėluoja" color="text-red-500" tasks={groups.overdue} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
               <TaskGroup label="🟡 Šiandien" color="text-amber-500" tasks={groups.today} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
               <TaskGroup label="🟢 Ši savaitė" color="text-emerald-600" tasks={groups.thisWeek} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
-              <TaskGroup label="📅 Vėliau / be termino" color="text-slate-400" tasks={groups.later} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+              <TaskGroup label="📌 Suplanuotos / be termino" color="text-slate-500" tasks={laterManual} onDone={markDone} onDelete={deleteTask} onSetDueDate={setDueDate} />
+
+              {/* Dokumentų ruošos užduotys — suskleistos pagal projektą */}
+              {autoByProject.size > 0 && (
+                <div className="mt-2 pt-3 border-t border-slate-100">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                    📂 Dokumentų ruoša pagal projektą
+                  </p>
+                  <p className="text-[10px] text-slate-300 mb-2 leading-snug">
+                    Automatiškai iš trūkstamų dokumentų. Uždėk terminą — užduotis pakils į priminimus.
+                  </p>
+                  {[...autoByProject.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name, 'lt')).map(([pid, grp]) => (
+                    <div key={pid} className="border-b border-slate-100 last:border-0">
+                      <button onClick={() => toggleProject(pid)} className="w-full flex items-center gap-1.5 py-2 text-left hover:bg-slate-50 rounded transition-colors">
+                        <span className={`text-slate-400 text-xs transition-transform inline-block ${expandedProjects.has(pid) ? 'rotate-90' : ''}`}>›</span>
+                        <span className="flex-1 text-xs font-medium text-slate-600 truncate">{grp.name}</span>
+                        <span className="shrink-0 text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{grp.tasks.length}</span>
+                      </button>
+                      {expandedProjects.has(pid) && (
+                        <div className="pl-4 pb-1">
+                          {grp.tasks.map(t => (
+                            <TaskRow key={t.key} task={t} hideProject onDone={() => markDone(t)} onSetDueDate={date => setDueDate(t, date)} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
