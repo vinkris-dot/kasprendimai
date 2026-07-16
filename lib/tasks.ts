@@ -136,8 +136,8 @@ export function generateAutoTasks(project: Project): TaskItem[] {
     });
   }
 
-  // PP completed → start SP+SA
-  if (completed.includes('PP') && !ts['start-sp-sa']?.doneAt) {
+  // PP completed → start SP+SA (tik kai šios dalys pasirinktos)
+  if (completed.includes('PP') && (project.selectedParts.SP || project.selectedParts.SA) && !ts['start-sp-sa']?.doneAt) {
     tasks.push({
       taskKey: 'start-sp-sa', stage: 'TDP', label: 'Pradėti SP+SA brėžinius',
       assignee: 'LL', checkable: true,
@@ -154,8 +154,11 @@ export function generateAutoTasks(project: Project): TaskItem[] {
     });
   }
 
-  // SLD completed → start TDP
-  if (completed.includes('SLD') && project.selectedParts.TDP && !ts['start-tdp']?.doneAt) {
+  // PP completed → start TDP (TDP eina lygiagrečiai su SLD derinimu, ne po jo).
+  // Kai pasirinkta SP/SA, startą dengia „Pradėti SP+SA brėžinius" — nedubliuojam.
+  if (completed.includes('PP') && project.selectedParts.TDP
+      && !(project.selectedParts.SP || project.selectedParts.SA)
+      && !ts['start-tdp']?.doneAt) {
     tasks.push({
       taskKey: 'start-tdp', stage: 'TDP', label: 'Pradėti TDP',
       assignee: 'LL', checkable: true,

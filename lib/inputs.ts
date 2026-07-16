@@ -50,11 +50,17 @@ export const DEFAULT_RESULT_INPUTS: Record<string, ResultInput[]> = {
   LVN: [
     { id: 'in-lvn-sp', label: 'Sklypo planas (SP) baigtas', kind: 'brezinys', partId: 'SP' },
   ],
+  // TDP eina LYGIAGREČIAI su SLD derinimu (startas — po PP), todėl SLD
+  // starto neblokuoja — jis reikalingas tik užbaigimui/statybai (soft).
   TDP: [
-    { id: 'in-tdp-sld', label: 'SLD gautas', kind: 'dokumentas', partId: 'SLD' },
+    { id: 'in-tdp-pp', label: 'PP baigtas', kind: 'brezinys', partId: 'PP' },
+    { id: 'in-tdp-sld', label: 'SLD gautas', kind: 'dokumentas', partId: 'SLD', soft: true },
   ],
+  // Ekspertizė — po TDP; SLD paprastai jau gautas (ypatingam statiniui SLD BE
+  // ekspertizės, ji atliekama PO SLD) — žymima soft, kad matytųsi būsenoje.
   EKSPERTIZE: [
     { id: 'in-eksp-tdp', label: 'TDP baigtas', kind: 'brezinys', partId: 'TDP' },
+    { id: 'in-eksp-sld', label: 'SLD gautas', kind: 'dokumentas', partId: 'SLD', soft: true },
   ],
 };
 

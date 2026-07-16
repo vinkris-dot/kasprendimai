@@ -325,7 +325,7 @@ export const STAGES: StageInfo[] = [
     bgClass: 'bg-indigo-100',
     textClass: 'text-indigo-700',
     tasks: [
-      { label: 'TDP startas (paraleliai su PP)', duration: '—' },
+      { label: 'TDP startas (lygiagrečiai su SLD derinimu)', duration: '—' },
       { label: 'SA + SK', duration: '1 mėn.' },
       { label: 'VN + EL + ŠVOK', duration: '5 sav.' },
       { label: 'Gaisrinė + energija', duration: '2 sav.' },

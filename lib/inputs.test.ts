@@ -126,3 +126,32 @@ describe('getUnlockPriorities', () => {
     expect(topo?.unlocks).toEqual(expect.arrayContaining(['PP', 'SP']));
   });
 });
+
+describe('proceso logika: TDP lygiagrečiai su SLD', () => {
+  it('TDP startas atrakintas kai PP baigtas, nors SLD dar derinamas', () => {
+    const p = makeProject();
+    p.completedStages = ['PP'];
+    p.activeStages = ['SLD', 'TDP'];
+    const r = getResultReadiness(p, 'TDP');
+    expect(r.ready).toBe(true); // SLD gautas — soft, starto neblokuoja
+    const sld = r.inputs.find(i => i.input.id === 'in-tdp-sld');
+    expect(sld?.status).toBe('uzsakyta'); // SLD vyksta — rodoma „laukiama"
+  });
+  it('TDP užblokuotas kol PP nebaigtas', () => {
+    const p = makeProject();
+    p.activeStages = ['PP'];
+    const r = getResultReadiness(p, 'TDP');
+    expect(r.ready).toBe(false);
+    expect(r.hardMissing).toBe(1);
+  });
+  it('Ekspertizė laukia TDP (hard), SLD — soft', () => {
+    const p = makeProject();
+    p.completedStages = ['PP', 'SLD'];
+    p.activeStages = ['TDP'];
+    const r = getResultReadiness(p, 'EKSPERTIZE');
+    expect(r.ready).toBe(false); // TDP dar vyksta
+    p.completedStages = ['PP', 'SLD', 'TDP'];
+    p.activeStages = ['EKSPERTIZE'];
+    expect(getResultReadiness(p, 'EKSPERTIZE').ready).toBe(true);
+  });
+});
