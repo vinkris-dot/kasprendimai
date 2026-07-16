@@ -9,17 +9,19 @@ import { tdpBlockDays } from './schedule';
 // jis laukia, o ne dirbamas, todėl į realų krūvį neskaičiuojamas.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Darbo sąnaudos (val.) etapui/daliai pagal žmogų — Kristinos įverčiai 2026-07-15 ──
+// ── Darbo sąnaudos (val.) etapui/daliai pagal žmogų — Kristinos įverčiai 2026-07-15,
+//    patikslinta 2026-07-16: LL PP ~24 val. (brėžinių užbaigimas), atitinkamai
+//    sumažintos LL TDP SA/SP dalys (proporcingai: SA 48→31, SP 19→12) ──
 export const STAGE_EFFORT: Partial<Record<string, Partial<Record<TeamMemberId, number>>>> = {
   SR: { NR: 10, KV: 3 }, // KV — pirminė analizė (~2 val. + retkarčiais savivaldybė)
-  PP: { KV: 72, NR: 7 },
+  PP: { KV: 72, NR: 7, LL: 24 },
   PP_VIESIMAS: { NR: 10 },
   IP: { NR: 5 },
   SLD: { NR: 12 },
   PAKARTOTINIS: { NR: 7 },
   BD: { LL: 10 },
-  SP: { LL: 19 },
-  SA: { LL: 48 },
+  SP: { LL: 12 },
+  SA: { LL: 31 },
   SK: { LL: 29 },
   LVN: { LL: 19 },
   EKSPERTIZE: { NR: 7 },
