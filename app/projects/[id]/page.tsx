@@ -205,7 +205,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     }
   }
 
-  async function uploadFile(file: File, subfolder: string, filename: string, onDone: (f: UploadedFile) => void, onError: () => void) {
+  // Vercel serverless priima iki ~4,5 MB užklausos kūno — didesni failai grąžina
+  // 413 dar nepasiekę mūsų kodo, todėl ribą tikrinam ir prieš siunčiant
+  const UPLOAD_LIMIT_BYTES = 4.4 * 1024 * 1024;
+
+  async function uploadFile(file: File, subfolder: string, filename: string, onDone: (f: UploadedFile) => void, onError: (message: string) => void) {
+    if (file.size > UPLOAD_LIMIT_BYTES) {
+      onError(`Failas per didelis: ${(file.size / 1024 / 1024).toFixed(1)} MB. Įkėlimo riba — 4,5 MB. Suspauskite PDF (pvz., per Peržiūrą: Failas → Eksportuoti → Quartz filtras „Reduce File Size") ir bandykite vėl.`);
+      return;
+    }
     const form = new FormData();
     form.append('file', file);
     form.append('projectName', project!.name);
@@ -213,10 +221,20 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     form.append('filename', filename);
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: form });
-      if (!res.ok) { onError(); return; }
+      if (!res.ok) {
+        onError(res.status === 413
+          ? 'Failas per didelis — įkėlimo riba 4,5 MB. Suspauskite PDF ir bandykite vėl.'
+          : `Klaida įkeliant failą (${res.status}).`);
+        return;
+      }
       const data = await res.json();
+      if (!data.url && !data.path?.startsWith('/')) {
+        // Nei lokalus diskas (Vercel jo neturi), nei R2 — failas niekur neišsaugotas
+        onError('Failas neišsaugotas: failų saugykla (R2) nesukonfigūruota.');
+        return;
+      }
       onDone({ name: data.name, path: data.path, uploadedAt: new Date().toISOString(), url: data.url ?? undefined });
-    } catch { onError(); }
+    } catch { onError('Klaida įkeliant failą — patikrinkite interneto ryšį.'); }
   }
 
   async function deleteFile(filePath: string, onDone: () => void) {
@@ -1371,7 +1389,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           <label className="cursor-pointer text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0 bg-slate-100 hover:bg-slate-200 rounded px-1.5 py-0.5 text-xs" title="Pridėti failą">
                             <input type="file" className="hidden" onChange={e => {
                               const f = e.target.files?.[0]; if (!f) return;
-                              uploadFile(f, item.subfolder ?? '01_PP/01_PP_BYLA/01_DOKUMENTAI', item.label, uf => addChecklistFile(project.id, item.id, uf), () => alert('Klaida įkeliant failą'));
+                              uploadFile(f, item.subfolder ?? '01_PP/01_PP_BYLA/01_DOKUMENTAI', item.label, uf => addChecklistFile(project.id, item.id, uf), msg => alert(msg));
                               e.target.value = '';
                             }} />
                             <PaperclipIcon />
@@ -1452,7 +1470,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       <label className="cursor-pointer text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0" title="Pridėti failą">
                         <input type="file" className="hidden" onChange={e => {
                           const f = e.target.files?.[0]; if (!f) return;
-                          uploadFile(f, doc.subfolder ?? 'DOKUMENTAI', `${doc.number}_${doc.name}`, uf => addDocumentFile(project.id, doc.id, uf), () => alert('Klaida įkeliant failą'));
+                          uploadFile(f, doc.subfolder ?? 'DOKUMENTAI', `${doc.number}_${doc.name}`, uf => addDocumentFile(project.id, doc.id, uf), msg => alert(msg));
                           e.target.value = '';
                         }} />
                         <PaperclipIcon />
@@ -1545,7 +1563,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
                           <input type="file" className="hidden" onChange={e => {
                             const f = e.target.files?.[0]; if (!f) return;
-                            uploadFile(f, 'DOKUMENTAI/KITI', doc.name, uf => addKitasDokFile(project.id, doc.id, uf), () => alert('Klaida įkeliant failą'));
+                            uploadFile(f, 'DOKUMENTAI/KITI', doc.name, uf => addKitasDokFile(project.id, doc.id, uf), msg => alert(msg));
                             e.target.value = '';
                           }} />
                           <PaperclipIcon />
@@ -1852,7 +1870,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
                       <input type="file" className="hidden" multiple onChange={e => {
                         Array.from(e.target.files ?? []).forEach(f => {
-                          uploadFile(f, `BYLOS/${sec.id}`, f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, sec.id, uf), () => alert('Klaida įkeliant failą'));
+                          uploadFile(f, `BYLOS/${sec.id}`, f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, sec.id, uf), msg => alert(msg));
                         });
                         e.target.value = '';
                       }} />
@@ -1884,7 +1902,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
                       <input type="file" className="hidden" multiple onChange={e => {
                         Array.from(e.target.files ?? []).forEach(f => {
-                          uploadFile(f, 'BYLOS/KITI', f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, 'KITI', uf), () => alert('Klaida įkeliant failą'));
+                          uploadFile(f, 'BYLOS/KITI', f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, 'KITI', uf), msg => alert(msg));
                         });
                         e.target.value = '';
                       }} />
