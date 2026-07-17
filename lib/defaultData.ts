@@ -361,9 +361,12 @@ export const STAGES: StageInfo[] = [
 // DEFAULT CHECKLISTS
 // ---------------------------------------------------------------------------
 
-const PP_TEKST = '01_PP/01_PP_BYLA/01_DOKUMENTAI';
-const PP_BREZ = '01_PP/02_DARBINIAI_BREZINIAI';
-const PP_VIZ = '01_PP/03_VIZUALIZACIJOS';
+// Poaplankiai pagal firmos standartą (_STANDARTAI/02_Sablonai/Tuscia_struktura) —
+// įkeliami failai krenta tiesiai į standartinę projekto aplanko struktūrą diske
+const PP_DIR = '02 - Projektas ir projekto dalys/02_Projektiniai pasiulymai (PP)';
+const PP_TEKST = `${PP_DIR}/01_Tekstine dalis`;
+const PP_BREZ = `${PP_DIR}/02_Grafine dalis`;
+const PP_VIZ = '03 - PP prezentacija (portfolio)/01_Vizualizacijos';
 
 export const DEFAULT_PP_BYLA: Omit<ChecklistItem, 'done'>[] = [
   { id: 'pp-01', label: 'Titulinis lapas', category: 'I. Tekstinė ir dokumentų dalis', subfolder: PP_TEKST },
@@ -386,29 +389,26 @@ export const DEFAULT_PP_BYLA: Omit<ChecklistItem, 'done'>[] = [
   { id: 'pp-18', label: 'Vizualizacija – aiškus mastelis (žmonės, kontekstas)', category: 'III. Architektūriniai sprendiniai', subfolder: PP_VIZ },
 ];
 
-const D1 = 'DOKUMENTAI/01_PROJEKTAVIMO_UZDUOTIS';
-const D2 = 'DOKUMENTAI/02_SKLYPAS_IR_TEISE';
-const D4 = 'DOKUMENTAI/04_PRADINIAI_DUOMENYS';
-const D5 = 'DOKUMENTAI/05_PRISIJUNGIMO_SALYGOS_IR_SR';
+const DOK = '01 - Dokumentai';
 
 export const DEFAULT_DOKUMENTAI: Omit<DocumentItem, 'received' | 'notes'>[] = [
-  { id: 'doc-00', number: '00', name: 'Statytojo (užsakovo) įgaliojimas', description: 'Jei PP teikia projektuotojas', subfolder: D4 },
-  { id: 'doc-01', number: '01', name: 'Projektavimo užduotis', description: '', subfolder: D1 },
-  { id: 'doc-02', number: '02', name: 'Nuosavybės teisę patvirtinantis dokumentas', description: 'NT registro išrašas arba nuomos/panaudos sutartis', subfolder: D2 },
-  { id: 'doc-03', number: '03', name: 'Žemės sklypo ribų planas', description: 'Galiojantis, sutampa su NT registro duomenimis', subfolder: D2 },
-  { id: 'doc-04', number: '04', name: 'Teritorijų planavimo dokumentų ištraukos', description: 'Detalusis/bendrasis planas, reglamentų santrauka', subfolder: D2 },
-  { id: 'doc-05', number: '05', name: 'Specialieji reikalavimai (SR)', description: 'Pateikti jei išduoti, sprendiniai atitinka SAR', subfolder: D5 },
-  { id: 'doc-06', number: '06', name: 'Prisijungimo sąlygos', description: 'vanduo/nuotekos, lietus, kelias, elektra, ryšiai, dujos', subfolder: D5 },
-  { id: 'doc-07', number: '07', name: 'Topografinė nuotrauka (toponuotrauka)', description: 'Aktualizuota, su galiojančiu derinimu', subfolder: D4 },
-  { id: 'doc-08', number: '08', name: 'Projektavimo įmonės registravimo dokumentai', description: 'Juridinio asmens registracijos duomenys', subfolder: D4 },
-  { id: 'doc-09', number: '09', name: 'Civilinės atsakomybės draudimas', description: 'Projektavimo veiklos, galiojantis', subfolder: D4 },
-  { id: 'doc-10', number: '10', name: 'Naudotos projektavimo programinės įrangos sąrašas', description: 'Visos programos, licencijuota, nurodytas projektas ir adresas', subfolder: D4 },
-  { id: 'doc-11', number: '11', name: 'Projekto vadovo paskyrimo dokumentas', description: '', subfolder: D4 },
-  { id: 'doc-12', number: '12', name: 'Projekto vadovo kvalifikacijos atestatas', description: 'Galiojantis, sritis atitinka statinį, duomenys sutampa su Infostatyba', subfolder: D4 },
-  { id: 'doc-13', number: '13', name: 'Gretimo sklypo sutikimai dėl neišlaikomo norminio atstumo', description: 'Jei statinys neišlaiko norminių atstumų iki kaimyninio sklypo', subfolder: D4 },
-  { id: 'doc-14', number: '14', name: 'Apjungimas į bendrą gaisrinį skyrių', description: 'Sutikimas dėl apjungimo su gretimo pastato gaisriniu skyriumi', subfolder: D4 },
-  { id: 'doc-15', number: '15', name: 'Bendraturčių sutikimai', description: 'Bendrosios nuosavybės dalyvių raštiški sutikimai', subfolder: D4 },
-  { id: 'doc-16', number: '16', name: 'Sutikimai', description: 'Kiti reikalingi sutikimai (nurodyti SR)', subfolder: D4 },
+  { id: 'doc-00', number: '00', name: 'Statytojo (užsakovo) įgaliojimas', description: 'Jei PP teikia projektuotojas', subfolder: `${DOK}/00_Igaliojimas ir sutartis` },
+  { id: 'doc-01', number: '01', name: 'Projektavimo užduotis', description: '', subfolder: `${DOK}/01_Projekto uzduotis` },
+  { id: 'doc-02', number: '02', name: 'Nuosavybės teisę patvirtinantis dokumentas', description: 'NT registro išrašas arba nuomos/panaudos sutartis', subfolder: `${DOK}/02_Nuosavybes dokumentai` },
+  { id: 'doc-03', number: '03', name: 'Žemės sklypo ribų planas', description: 'Galiojantis, sutampa su NT registro duomenimis', subfolder: `${DOK}/03_Zemes sklypo ribu planas` },
+  { id: 'doc-04', number: '04', name: 'Teritorijų planavimo dokumentų ištraukos', description: 'Detalusis/bendrasis planas, reglamentų santrauka', subfolder: `${DOK}/04_Teritoriju planavimo dokumentai` },
+  { id: 'doc-05', number: '05', name: 'Specialieji reikalavimai (SR)', description: 'Pateikti jei išduoti, sprendiniai atitinka SAR', subfolder: `${DOK}/05_Specialieji reikalavimai` },
+  { id: 'doc-06', number: '06', name: 'Prisijungimo sąlygos', description: 'vanduo/nuotekos, lietus, kelias, elektra, ryšiai, dujos', subfolder: `${DOK}/06_Prisijungimo salygos` },
+  { id: 'doc-07', number: '07', name: 'Topografinė nuotrauka (toponuotrauka)', description: 'Aktualizuota, su galiojančiu derinimu', subfolder: `${DOK}/07_Toponuotrauka` },
+  { id: 'doc-08', number: '08', name: 'Projektavimo įmonės registravimo dokumentai', description: 'Juridinio asmens registracijos duomenys', subfolder: DOK },
+  { id: 'doc-09', number: '09', name: 'Civilinės atsakomybės draudimas', description: 'Projektavimo veiklos, galiojantis', subfolder: DOK },
+  { id: 'doc-10', number: '10', name: 'Naudotos projektavimo programinės įrangos sąrašas', description: 'Visos programos, licencijuota, nurodytas projektas ir adresas', subfolder: DOK },
+  { id: 'doc-11', number: '11', name: 'Projekto vadovo paskyrimo dokumentas', description: '', subfolder: DOK },
+  { id: 'doc-12', number: '12', name: 'Projekto vadovo kvalifikacijos atestatas', description: 'Galiojantis, sritis atitinka statinį, duomenys sutampa su Infostatyba', subfolder: DOK },
+  { id: 'doc-13', number: '13', name: 'Gretimo sklypo sutikimai dėl neišlaikomo norminio atstumo', description: 'Jei statinys neišlaiko norminių atstumų iki kaimyninio sklypo', subfolder: DOK },
+  { id: 'doc-14', number: '14', name: 'Apjungimas į bendrą gaisrinį skyrių', description: 'Sutikimas dėl apjungimo su gretimo pastato gaisriniu skyriumi', subfolder: DOK },
+  { id: 'doc-15', number: '15', name: 'Bendraturčių sutikimai', description: 'Bendrosios nuosavybės dalyvių raštiški sutikimai', subfolder: DOK },
+  { id: 'doc-16', number: '16', name: 'Sutikimai', description: 'Kiti reikalingi sutikimai (nurodyti SR)', subfolder: DOK },
 ];
 
 export const TEAM_MEMBERS: TeamMember[] = [

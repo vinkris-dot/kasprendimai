@@ -1,11 +1,11 @@
 import { NextRequest } from 'next/server';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { todayLT } from '@/lib/dates';
 import { corsJson, corsPreflight } from '@/lib/localCors';
+import { getBasePath, beLietuvisku, saugusVardas } from '@/lib/serverPaths';
 
 const pExecFile = promisify(execFile);
 
@@ -14,20 +14,6 @@ const pExecFile = promisify(execFile);
 // 00_projekto_duomenys.json ir paleidžiamas _STANDARTAI/04_Helpers/uzpildyti.js,
 // kuris užpildo šablonus į <projektas>/_PARUOSTA_PERZIURAI/.
 
-const CONFIG_PATH = path.join(os.homedir(), '.openclaw-config.json');
-function getBasePath(): string {
-  try {
-    if (fs.existsSync(CONFIG_PATH)) return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')).basePath;
-  } catch {}
-  return path.join(os.homedir(), 'Documents', 'KA_projektai');
-}
-
-const LT_MAP: Record<string, string> = {
-  ą: 'a', č: 'c', ę: 'e', ė: 'e', į: 'i', š: 's', ų: 'u', ū: 'u', ž: 'z',
-  Ą: 'A', Č: 'C', Ę: 'E', Ė: 'E', Į: 'I', Š: 'S', Ų: 'U', Ū: 'U', Ž: 'Z',
-};
-const beLietuvisku = (s: string) => s.replace(/[ąčęėįšųūžĄČĘĖĮŠŲŪŽ]/g, c => LT_MAP[c] ?? c);
-const saugusVardas = (s: string) => beLietuvisku(s).replace(/[/\\:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim();
 
 // Programos dalys → dalies aplanko prefiksas „02 - Projektas ir projekto dalys" viduje.
 // 01 (PPP) ir 02 (PP) paliekami visada.

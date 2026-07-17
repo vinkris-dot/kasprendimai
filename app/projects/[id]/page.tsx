@@ -12,6 +12,20 @@ import InputsTab from '@/app/components/InputsTab';
 import { guardedToggleStage } from '@/app/components/stageGuard';
 import { todayLT } from '@/lib/dates';
 
+// Bylų PDF vietos firmos standarto aplankuose (dalių bylos — į 04_Laidos)
+const DALYS_DIR = '02 - Projektas ir projekto dalys';
+const BYLA_DISK: Record<string, string> = {
+  PP: `${DALYS_DIR}/02_Projektiniai pasiulymai (PP)/04_Laidos`,
+  IP: '04 - Derinimai/01_Savivaldybe',
+  SLD: '04 - Derinimai/04_SLD (Infostatyba)',
+  TDP: DALYS_DIR,
+  BD: `${DALYS_DIR}/03_Bendroji dalis (BD)/04_Laidos`,
+  SP: `${DALYS_DIR}/04_Sklypo sutvarkymo dalis (SP)/04_Laidos`,
+  SA: `${DALYS_DIR}/05_Architekturos dalis (SA)/04_Laidos`,
+  SK: `${DALYS_DIR}/06_Konstrukciju dalis (SK)/04_Laidos`,
+  LVN: `${DALYS_DIR}/08_Vandentiekis ir nuotekos (VN)/04_Laidos`,
+};
+
 const BYLA_SECTIONS: { id: string; label: string; partKey: string }[] = [
   { id: 'PP',  label: 'PP – Projektiniai pasiūlymai', partKey: 'PP' },
   { id: 'IP',  label: 'Išankstiniai pritarimai',       partKey: 'IP' },
@@ -215,6 +229,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     const form = new FormData();
     form.append('file', file);
     form.append('projectName', project!.name);
+    form.append('address', project!.address || project!.name);
     form.append('subfolder', subfolder);
     form.append('filename', filename);
     const isLocalApp = ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -1410,7 +1425,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           <label className="cursor-pointer text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0 bg-slate-100 hover:bg-slate-200 rounded px-1.5 py-0.5 text-xs" title="Pridėti failą">
                             <input type="file" className="hidden" onChange={e => {
                               const f = e.target.files?.[0]; if (!f) return;
-                              uploadFile(f, item.subfolder ?? '01_PP/01_PP_BYLA/01_DOKUMENTAI', item.label, uf => addChecklistFile(project.id, item.id, uf), msg => alert(msg));
+                              uploadFile(f, item.subfolder ?? `${DALYS_DIR}/02_Projektiniai pasiulymai (PP)/01_Tekstine dalis`, item.label, uf => addChecklistFile(project.id, item.id, uf), msg => alert(msg));
                               e.target.value = '';
                             }} />
                             <PaperclipIcon />
@@ -1491,7 +1506,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       <label className="cursor-pointer text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0" title="Pridėti failą">
                         <input type="file" className="hidden" onChange={e => {
                           const f = e.target.files?.[0]; if (!f) return;
-                          uploadFile(f, doc.subfolder ?? 'DOKUMENTAI', `${doc.number}_${doc.name}`, uf => addDocumentFile(project.id, doc.id, uf), msg => alert(msg));
+                          uploadFile(f, doc.subfolder ?? '01 - Dokumentai', `${doc.number}_${doc.name}`, uf => addDocumentFile(project.id, doc.id, uf), msg => alert(msg));
                           e.target.value = '';
                         }} />
                         <PaperclipIcon />
@@ -1584,7 +1599,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
                           <input type="file" className="hidden" onChange={e => {
                             const f = e.target.files?.[0]; if (!f) return;
-                            uploadFile(f, 'DOKUMENTAI/KITI', doc.name, uf => addKitasDokFile(project.id, doc.id, uf), msg => alert(msg));
+                            uploadFile(f, doc.subfolder ?? '01 - Dokumentai', doc.name, uf => addKitasDokFile(project.id, doc.id, uf), msg => alert(msg));
                             e.target.value = '';
                           }} />
                           <PaperclipIcon />
@@ -1891,7 +1906,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
                       <input type="file" className="hidden" multiple onChange={e => {
                         Array.from(e.target.files ?? []).forEach(f => {
-                          uploadFile(f, `BYLOS/${sec.id}`, f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, sec.id, uf), msg => alert(msg));
+                          uploadFile(f, BYLA_DISK[sec.id] ?? DALYS_DIR, f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, sec.id, uf), msg => alert(msg));
                         });
                         e.target.value = '';
                       }} />
@@ -1923,7 +1938,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <label className="cursor-pointer text-slate-300 hover:text-slate-500 flex-shrink-0" title="Pridėti failą">
                       <input type="file" className="hidden" multiple onChange={e => {
                         Array.from(e.target.files ?? []).forEach(f => {
-                          uploadFile(f, 'BYLOS/KITI', f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, 'KITI', uf), msg => alert(msg));
+                          uploadFile(f, DALYS_DIR, f.name.replace(/\.[^/.]+$/, ''), uf => addBylaFile(project.id, 'KITI', uf), msg => alert(msg));
                         });
                         e.target.value = '';
                       }} />

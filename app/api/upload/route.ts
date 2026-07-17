@@ -1,17 +1,10 @@
 import { NextRequest } from 'next/server';
 import { corsJson, corsPreflight } from '@/lib/localCors';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
+import { getBasePath, saugusVardas } from '@/lib/serverPaths';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
-const CONFIG_PATH = path.join(os.homedir(), '.openclaw-config.json');
-function getBasePath(): string {
-  try {
-    if (fs.existsSync(CONFIG_PATH)) return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')).basePath;
-  } catch {}
-  return path.join(os.homedir(), 'Documents', 'KA_projektai');
-}
 
 // R2 S3-compatible client
 function getR2Client(): S3Client | null {
@@ -67,9 +60,14 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const projectName = formData.get('projectName') as string;
+    const address = formData.get('address') as string | null;
     const subfolder = formData.get('subfolder') as string;
 
     if (!file || !projectName) return corsJson({ error: 'Trūksta parametrų' }, 400);
+    // Aplankas — pagal ADRESĄ ta pačia taisykle kaip „Sukurti aplanką" (saugusVardas),
+    // kad failai kristų į standartinį projekto aplanką, o ne į dublikatą kitu vardu
+    const folderName = saugusVardas(address || projectName);
+    if (!folderName || folderName.includes('..')) return corsJson({ error: 'Netinkamas projekto aplanko vardas' }, 400);
 
     const ext = path.extname(file.name).toLowerCase();
     const contentType = CONTENT_TYPES[ext] ?? 'application/octet-stream';
@@ -85,8 +83,10 @@ export async function POST(req: NextRequest) {
     let finalName = baseNameNoExt + ext;
     try {
       const basePath = getBasePath();
-      const safeName = projectName.replace(/[/\\:*?"<>|]/g, '_');
-      const targetDir = path.join(basePath, safeName, subfolder ?? 'DOKUMENTAI');
+      const targetDir = path.join(basePath, folderName, subfolder ?? '01 - Dokumentai');
+      if (!path.resolve(targetDir).startsWith(path.resolve(basePath) + path.sep)) {
+        throw new Error('Kelias už projektų aplanko ribų');
+      }
       fs.mkdirSync(targetDir, { recursive: true });
 
       let counter = 2;
@@ -100,9 +100,8 @@ export async function POST(req: NextRequest) {
       // Running on Vercel / no local filesystem — skip local save
     }
 
-    // Upload to R2
-    const safeProjName = projectName.replace(/[/\\:*?"<>|]/g, '_');
-    const r2Key = `${safeProjName}/${subfolder ?? 'DOKUMENTAI'}/${finalName}`;
+    // Upload to R2 — tas pats aplanko vardas kaip diske
+    const r2Key = `${folderName}/${subfolder ?? '01 - Dokumentai'}/${finalName}`;
     const r2Url = await uploadToR2(fileBuffer, r2Key, contentType);
 
     return corsJson({

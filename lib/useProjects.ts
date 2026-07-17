@@ -69,7 +69,9 @@ function migrateProject(p: Project): Project {
       const merged = [
         ...p.dokumentai.filter(d => d.id !== 'doc-17' && !['doc-06a','doc-06b','doc-06c','doc-06d','doc-06e','doc-06f'].includes(d.id)).map(d => {
           const def = DEFAULT_DOKUMENTAI.find(dd => dd.id === d.id);
-          return def?.subfolder && !d.subfolder ? { ...d, subfolder: def.subfolder } : d;
+          // subfolder — konfigūracija (firmos standarto kelias), ne naudotojo duomuo:
+          // visada atnaujinama iš šablono, kad seni įrašai gautų naują struktūrą
+          return def?.subfolder && d.subfolder !== def.subfolder ? { ...d, subfolder: def.subfolder } : d;
         }),
         ...newDocs,
       ];
@@ -82,8 +84,11 @@ function migrateProject(p: Project): Project {
     })(),
     ppByla: (p.ppByla ?? []).map(item => {
       const def = DEFAULT_PP_BYLA.find(pp => pp.id === item.id);
-      return def?.subfolder && !item.subfolder ? { ...item, subfolder: def.subfolder } : item;
+      return def?.subfolder && item.subfolder !== def.subfolder ? { ...item, subfolder: def.subfolder } : item;
     }),
+    // Seni „kiti" dokumentai su nebeegzistuojančiu keliu — į standarto 01 - Dokumentai
+    kitiDokumentai: (p.kitiDokumentai ?? []).map(d =>
+      d.subfolder === 'DOKUMENTAI/KITI' ? { ...d, subfolder: '01 - Dokumentai' } : d),
     selectedParts: mergedSelectedParts,
     partStatuses: p.partStatuses ?? {},
     completedStages: p.completedStages ?? [],
@@ -586,7 +591,7 @@ export function useProjects() {
           number: String((p.kitiDokumentai ?? []).length + 1),
           name,
           description: '',
-          subfolder: 'DOKUMENTAI/KITI',
+          subfolder: '01 - Dokumentai',
           received: false,
           notes: '',
           files: [],
