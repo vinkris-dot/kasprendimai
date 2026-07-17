@@ -54,29 +54,45 @@ function parseAdresas(address: string) {
   return { gatve, miestas, sav: savDalis, vietove: dalys.slice(1).join(', ') };
 }
 
+// Produkcijos puslapis (Vercel) aplanką kuria per LOKALŲ serverį Kristinos Mac'e:
+// gavęs 501 iš debesies, klientas kviečia http://localhost:3001/api/create-folder.
+// Tam šis maršrutas leidžia cross-origin užklausas iš produkcijos domeno.
+const ALLOWED_ORIGIN = 'https://kasprendimai-sigma.vercel.app';
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+const json = (data: unknown, status = 200) =>
+  NextResponse.json(data, { status, headers: CORS_HEADERS });
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function POST(req: NextRequest) {
   if (process.env.VERCEL) {
-    return NextResponse.json(
+    return json(
       { error: 'Aplankas kuriamas tik kompiuteryje (lokaliai paleistoje programoje).' },
-      { status: 501 },
+      501,
     );
   }
 
   try {
     const body = await req.json();
     const address: string = body.address || body.projectName;
-    if (!address) return NextResponse.json({ error: 'Trūksta adreso' }, { status: 400 });
+    if (!address) return json({ error: 'Trūksta adreso' }, 400);
     const parts: Record<string, boolean> = body.parts ?? {};
     const customParts: string[] = Array.isArray(body.customParts) ? body.customParts : [];
 
     const basePath = getBasePath();
     const folderName = saugusVardas(address);
     if (!folderName || folderName.includes('..')) {
-      return NextResponse.json({ error: 'Netinkamas adresas aplanko vardui' }, { status: 400 });
+      return json({ error: 'Netinkamas adresas aplanko vardui' }, 400);
     }
     const projectPath = path.join(basePath, folderName);
     if (!path.resolve(projectPath).startsWith(path.resolve(basePath) + path.sep)) {
-      return NextResponse.json({ error: 'Kelias už projektų aplanko ribų' }, { status: 400 });
+      return json({ error: 'Kelias už projektų aplanko ribų' }, 400);
     }
     const standartai = path.join(basePath, '_STANDARTAI');
     const tuscia = path.join(standartai, '02_Sablonai', 'Tuscia_struktura', 'Adresas g. 0, Miestas');
@@ -164,7 +180,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    return json({
       success: true,
       path: projectPath,
       jauBuvo,
@@ -172,6 +188,6 @@ export async function POST(req: NextRequest) {
       uzpildymoKlaida,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return json({ error: err.message }, 500);
   }
 }

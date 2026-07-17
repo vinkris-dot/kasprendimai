@@ -247,8 +247,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   async function handleCreateFolder() {
     setFolderStatus('creating');
     try {
-      const res = await fetch('/api/create-folder', {
-        method: 'POST',
+      const payload = {
+        method: 'POST' as const,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           address: project!.address || project!.name,
@@ -258,7 +258,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           customParts: (project!.customParts ?? []).map(c => c.name),
           pu: project!.pu,
         }),
-      });
+      };
+      let res = await fetch('/api/create-folder', payload);
+      if (res.status === 501) {
+        // Produkcijoje (Vercel) disko nėra — aplanką kuria lokalus serveris Kristinos
+        // kompiuteryje. Veikia tik prie to kompiuterio, kuriame jis įjungtas.
+        try {
+          res = await fetch('http://localhost:3001/api/create-folder', payload);
+        } catch {
+          alert('Aplankas kuriamas tavo kompiuterio diske (Documents/KA_projektai). Nepavyko pasiekti lokalios programos — įsitikink, kad esi prie savo kompiuterio ir jame veikia lokalus serveris (localhost:3001).');
+          setFolderStatus('error');
+          return;
+        }
+      }
       const data = await res.json();
       if (!res.ok) { alert(`Klaida: ${data.error}`); setFolderStatus('error'); return; }
       if (data.uzpildyta > 0 && !data.jauBuvo) {
