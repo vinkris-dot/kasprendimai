@@ -7,6 +7,11 @@ import { supabase } from '@/lib/supabase';
  * Prisijungimo vartai: be sesijos rodo prisijungimo formą (magic link į el. paštą).
  * Tikroji apsauga — Supabase RLS (duomenys pasiekiami tik prisijungusiems);
  * šis komponentas tik UI sluoksnis.
+ *
+ * Kodas iš laiško (2026-07-17): Dock/PWA programėlė turi ATSKIRĄ saugyklą nuo
+ * naršyklės — magic-link nuoroda visada atsidaro naršyklėje, tad programėlė
+ * lieka neprisijungusi. Todėl šalia nuorodos priimamas ir vienkartinis kodas
+ * ({{ .Token }} Supabase Magic Link šablone) — įvedamas tiesiai programėlėje.
  */
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<'checking' | 'in' | 'out'>('checking');
@@ -14,6 +19,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const [code, setCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [showCode, setShowCode] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setStatus(data.session ? 'in' : 'out'));
@@ -46,34 +54,109 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     else setSent(true);
   }
 
+  // Kodo patvirtinimas vyksta ČIA, be jokio peradresavimo — todėl sesija
+  // atsiranda būtent toje programoje/naršyklėje, kurioje įvestas kodas.
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setVerifying(true);
+    const { error: err } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: code.trim(),
+      type: 'email',
+    });
+    setVerifying(false);
+    if (err) setError('Kodas netinka arba baigėsi jo galiojimas. Užsisakykite naują laišką ir bandykite dar kartą.');
+    // Pavykus onAuthStateChange perjungia į „in" automatiškai
+  }
+
+  const codeForm = (
+    <form onSubmit={verifyCode} className="space-y-3">
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        placeholder="el. paštas"
+        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+      />
+      <input
+        type="text"
+        required
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        value={code}
+        onChange={e => setCode(e.target.value)}
+        placeholder="kodas iš laiško (6 skaitmenys)"
+        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-slate-900"
+      />
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <button
+        type="submit"
+        disabled={verifying}
+        className="w-full bg-slate-900 text-white text-sm px-4 py-2.5 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
+      >
+        {verifying ? 'Tikrinama…' : 'Prisijungti su kodu'}
+      </button>
+    </form>
+  );
+
   return (
     <div className="min-h-[70vh] flex items-center justify-center">
       <div className="bg-white rounded-2xl border border-slate-200 p-8 w-full max-w-sm shadow-sm">
         <h1 className="text-lg font-semibold text-slate-900 mb-1">Prisijungimas</h1>
-        <p className="text-sm text-slate-500 mb-6">Įveskite savo el. paštą — atsiųsime prisijungimo nuorodą.</p>
+        <p className="text-sm text-slate-500 mb-6">Įveskite savo el. paštą — atsiųsime prisijungimo laišką.</p>
         {sent ? (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700">
-            ✓ Nuoroda išsiųsta į <strong>{email}</strong>. Atidarykite laišką ir paspauskite nuorodą.
+          <div className="space-y-4">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700">
+              ✓ Laiškas išsiųstas į <strong>{email}</strong>. Naršyklėje — spauskite nuorodą;
+              programėlėje (Dock) — įveskite kodą iš laiško žemiau.
+            </div>
+            {codeForm}
+            <button
+              onClick={() => { setSent(false); setCode(''); setError(''); }}
+              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Siųsti laišką iš naujo
+            </button>
+          </div>
+        ) : showCode ? (
+          <div className="space-y-4">
+            {codeForm}
+            <button
+              onClick={() => { setShowCode(false); setError(''); }}
+              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              ← Neturiu kodo — siųsti laišką
+            </button>
           </div>
         ) : (
-          <form onSubmit={sendLink} className="space-y-3">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="el. paštas"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
-            />
-            {error && <p className="text-xs text-red-500">{error}</p>}
+          <div className="space-y-4">
+            <form onSubmit={sendLink} className="space-y-3">
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="el. paštas"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+              {error && <p className="text-xs text-red-500">{error}</p>}
+              <button
+                type="submit"
+                disabled={sending}
+                className="w-full bg-slate-900 text-white text-sm px-4 py-2.5 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
+              >
+                {sending ? 'Siunčiama…' : 'Gauti prisijungimo laišką'}
+              </button>
+            </form>
             <button
-              type="submit"
-              disabled={sending}
-              className="w-full bg-slate-900 text-white text-sm px-4 py-2.5 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
+              onClick={() => { setShowCode(true); setError(''); }}
+              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
             >
-              {sending ? 'Siunčiama…' : 'Gauti prisijungimo nuorodą'}
+              Jau turiu kodą iš laiško
             </button>
-          </form>
+          </div>
         )}
       </div>
     </div>
