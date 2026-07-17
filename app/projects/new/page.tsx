@@ -691,22 +691,24 @@ export default function NewProject() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     {stageDates['DP'] && (<>
                       {chip('DP')}
-                      <span className="text-[10px] text-slate-400" title="DP rengiamas lygiagrečiai su SR ir PP">∥</span>
+                      <span className="text-[10px] text-slate-400" title="DP rengiamas lygiagrečiai su SR ir PP">+</span>
                     </>)}
                     {chip('SR')}
-                    {stageDates['PP'] && (<><span className="text-slate-300 text-xs">→</span>{chip('PP')}</>)}
-                    {par.length > 0 && (<>
+                    {stageDates['PP'] && (<span className="inline-flex items-center gap-1.5"><span className="text-slate-300 text-xs">→</span>{chip('PP')}</span>)}
+                    {par.length > 0 && (<span className="inline-flex items-center gap-1.5">
                       <span className="text-slate-300 text-xs">→</span>
-                      <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
-                        <span className="text-[10px] text-slate-400" title="Atrakina baigtas PP — vyksta lygiagrečiai">po PP ∥</span>
+                      <span className="inline-flex flex-wrap items-center gap-1.5 bg-slate-100/70 rounded-lg px-2 py-1">
+                        <span className="text-[10px] font-medium text-slate-400" title="Atrakina baigtas PP — vyksta lygiagrečiai">po PP · lygiagrečiai</span>
                         {par.map(chip)}
                       </span>
-                    </>)}
-                    {stageDates['PAKARTOTINIS'] && (<><span className="text-slate-300 text-xs">→</span>{chip('PAKARTOTINIS')}</>)}
-                    {stageDates['EKSPERTIZE'] && (<><span className="text-slate-300 text-xs">→</span>{chip('EKSPERTIZE')}</>)}
-                    <span className="text-slate-300 text-xs">→</span>
-                    <span className="text-[11px] font-semibold border border-slate-300 bg-slate-50 text-slate-700 rounded-full px-2 py-0.5 whitespace-nowrap">
-                      Statyba{targetDate ? ` ${formatDate(targetDate)}` : ''}
+                    </span>)}
+                    {stageDates['PAKARTOTINIS'] && (<span className="inline-flex items-center gap-1.5"><span className="text-slate-300 text-xs">→</span>{chip('PAKARTOTINIS')}</span>)}
+                    {stageDates['EKSPERTIZE'] && (<span className="inline-flex items-center gap-1.5"><span className="text-slate-300 text-xs">→</span>{chip('EKSPERTIZE')}</span>)}
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="text-slate-300 text-xs">→</span>
+                      <span className="text-[11px] font-semibold border border-slate-300 bg-slate-50 text-slate-700 rounded-full px-2 py-0.5 whitespace-nowrap">
+                        Statyba{targetDate ? ` ${formatDate(targetDate)}` : ''}
+                      </span>
                     </span>
                   </div>
                   {anyTdpParts && (
@@ -718,28 +720,28 @@ export default function NewProject() {
                           {partChip(pid)}
                         </span>
                       ))}
-                      {tdpPar1Sel.length > 0 && (<>
+                      {tdpPar1Sel.length > 0 && (<span className="inline-flex items-center gap-1.5">
                         {tdpPhase12.length > 0 && <span className="text-slate-300 text-xs">→</span>}
-                        <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
-                          <span className="text-[10px] text-slate-400" title="Lygiagrečiai po SP">∥</span>
+                        <span className="inline-flex flex-wrap items-center gap-1.5 bg-slate-100/70 rounded-lg px-2 py-1">
+                          <span className="text-[10px] font-medium text-slate-400" title="Lygiagrečiai po SP">lygiagrečiai</span>
                           {tdpPar1Sel.map(partChip)}
                         </span>
-                      </>)}
-                      {hasSvok && (<>
+                      </span>)}
+                      {hasSvok && (<span className="inline-flex items-center gap-1.5">
                         {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0) && <span className="text-slate-300 text-xs">→</span>}
                         {partChip('SVOK')}
-                      </>)}
-                      {tdpPar2Sel.length > 0 && (<>
+                      </span>)}
+                      {tdpPar2Sel.length > 0 && (<span className="inline-flex items-center gap-1.5">
                         {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0 || hasSvok) && <span className="text-slate-300 text-xs">→</span>}
-                        <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
-                          <span className="text-[10px] text-slate-400" title="Kitos dalys — lygiagrečiai po ŠVOK">∥ kitos</span>
+                        <span className="inline-flex flex-wrap items-center gap-1.5 bg-slate-100/70 rounded-lg px-2 py-1">
+                          <span className="text-[10px] font-medium text-slate-400" title="Kitos dalys — lygiagrečiai po ŠVOK">kitos dalys</span>
                           {tdpPar2Sel.map(partChip)}
                         </span>
-                      </>)}
-                      {hasBd && (<>
+                      </span>)}
+                      {hasBd && (<span className="inline-flex items-center gap-1.5">
                         {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0 || hasSvok || tdpPar2Sel.length > 0) && <span className="text-slate-300 text-xs">→</span>}
                         {partChip('BD')}
-                      </>)}
+                      </span>)}
                     </div>
                   )}
                 </>

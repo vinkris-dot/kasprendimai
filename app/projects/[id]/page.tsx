@@ -551,9 +551,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         </div>
       </div>
 
-      {/* Selected parts chips */}
+      {/* Selected parts chips — TDP subdalys nerodomos (jas rodo proceso seka ir TDP kortelė) */}
       <div className="flex flex-wrap gap-1.5 mb-5">
-        {PROJECT_PARTS.filter(p => selectedParts[p.id]).map(p => (
+        {PROJECT_PARTS.filter(p => selectedParts[p.id] && (p.group !== 'tdp' || p.id === 'TDP' || p.id === 'EKSPERTIZE')).map(p => (
           <span key={p.id} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full font-medium">
             {p.label}
           </span>
@@ -644,10 +644,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </div>
               );
             })}
+            {/* Trūkstami dokumentai — gintarinė (ne raudona): raudona rezervuota vėlavimui */}
             {missingDocs.length > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                <p className="text-sm text-red-700 font-medium mb-1">Trūksta {missingDocs.length} dokumentų</p>
-                <p className="text-xs text-red-400">{missingDocs.slice(0,3).map(d => d.name).join(', ')}{missingDocs.length > 3 ? ` ir dar ${missingDocs.length - 3}...` : ''}</p>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                <p className="text-sm text-amber-700 font-medium mb-1">Trūksta {missingDocs.length} dokumentų</p>
+                <p className="text-xs text-amber-500">{missingDocs.slice(0,3).map(d => d.name).join(', ')}{missingDocs.length > 3 ? ` ir dar ${missingDocs.length - 3}...` : ''}</p>
               </div>
             )}
           </div>
@@ -662,7 +663,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                 tab === t.id
                   ? 'border-slate-900 text-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -764,29 +765,29 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 <div className="flex flex-wrap items-center gap-1.5">
                   {has('DP') && (<>
                     {stageChip('DP')}
-                    <span className="text-[10px] text-slate-400" title="DP rengiamas lygiagrečiai su SR ir PP">∥</span>
+                    <span className="text-[10px] text-slate-400" title="DP rengiamas lygiagrečiai su SR ir PP">+</span>
                   </>)}
                   {stageChip('SR')}
-                  {has('PP') && (<>
+                  {has('PP') && (<span className="inline-flex items-center gap-1.5">
                     <span className="text-slate-300 text-xs">→</span>
                     {stageChip('PP')}
-                  </>)}
-                  {parallelAfterPP.length > 0 && (<>
+                  </span>)}
+                  {parallelAfterPP.length > 0 && (<span className="inline-flex items-center gap-1.5">
                     <span className="text-slate-300 text-xs">→</span>
-                    <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
-                      <span className="text-[10px] text-slate-400" title="Atrakina baigtas PP — vyksta lygiagrečiai">po PP ∥</span>
+                    <span className="inline-flex flex-wrap items-center gap-1.5 bg-slate-100/70 rounded-lg px-2 py-1">
+                      <span className="text-[10px] font-medium text-slate-400" title="Atrakina baigtas PP — vyksta lygiagrečiai">po PP · lygiagrečiai</span>
                       {parallelAfterPP.map(stageChip)}
                     </span>
-                  </>)}
-                  {has('PAKARTOTINIS') && (<>
+                  </span>)}
+                  {has('PAKARTOTINIS') && (<span className="inline-flex items-center gap-1.5">
                     <span className="text-slate-300 text-xs">→</span>
                     {stageChip('PAKARTOTINIS')}
-                  </>)}
-                  {has('EKSPERTIZE') && (<>
+                  </span>)}
+                  {has('EKSPERTIZE') && (<span className="inline-flex items-center gap-1.5">
                     <span className="text-slate-300 text-xs">→</span>
                     {stageChip('EKSPERTIZE')}
-                  </>)}
-                  <span className="text-slate-300 text-xs">→</span>
+                  </span>)}
+                  <span className="inline-flex items-center gap-1.5"><span className="text-slate-300 text-xs">→</span>
                   <span
                     className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 whitespace-nowrap ${
                       buildBlockers.length === 0
@@ -800,7 +801,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     {buildBlockers.length === 0
                       ? 'Statyba galima'
                       : `Statyba ${formatDate(effectiveTargetDate || project.targetConstructionDate)}`}
-                  </span>
+                  </span></span>
                 </div>
                 {anyTdpParts && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-slate-100">
@@ -811,28 +812,28 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         {partChip(pid)}
                       </span>
                     ))}
-                    {tdpPar1Sel.length > 0 && (<>
+                    {tdpPar1Sel.length > 0 && (<span className="inline-flex items-center gap-1.5">
                       {tdpPhase12.length > 0 && <span className="text-slate-300 text-xs">→</span>}
-                      <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
-                        <span className="text-[10px] text-slate-400" title="Lygiagrečiai po SP">∥</span>
+                      <span className="inline-flex flex-wrap items-center gap-1.5 bg-slate-100/70 rounded-lg px-2 py-1">
+                        <span className="text-[10px] font-medium text-slate-400" title="Lygiagrečiai po SP">lygiagrečiai</span>
                         {tdpPar1Sel.map(pid => partChip(pid))}
                       </span>
-                    </>)}
-                    {hasSvok && (<>
+                    </span>)}
+                    {hasSvok && (<span className="inline-flex items-center gap-1.5">
                       {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0) && <span className="text-slate-300 text-xs">→</span>}
                       {partChip('SVOK')}
-                    </>)}
-                    {tdpPar2Sel.length > 0 && (<>
+                    </span>)}
+                    {tdpPar2Sel.length > 0 && (<span className="inline-flex items-center gap-1.5">
                       {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0 || hasSvok) && <span className="text-slate-300 text-xs">→</span>}
-                      <span className="inline-flex flex-wrap items-center gap-1.5 border border-dashed border-slate-200 rounded-lg px-1.5 py-1">
-                        <span className="text-[10px] text-slate-400" title="Kitos dalys — lygiagrečiai po ŠVOK">∥ kitos</span>
+                      <span className="inline-flex flex-wrap items-center gap-1.5 bg-slate-100/70 rounded-lg px-2 py-1">
+                        <span className="text-[10px] font-medium text-slate-400" title="Kitos dalys — lygiagrečiai po ŠVOK">kitos dalys</span>
                         {tdpPar2Sel.map(pid => partChip(pid))}
                       </span>
-                    </>)}
-                    {hasBd && (<>
+                    </span>)}
+                    {hasBd && (<span className="inline-flex items-center gap-1.5">
                       {(tdpPhase12.length > 0 || tdpPar1Sel.length > 0 || hasSvok || tdpPar2Sel.length > 0) && <span className="text-slate-300 text-xs">→</span>}
                       {partChip('BD')}
-                    </>)}
+                    </span>)}
                   </div>
                 )}
               </div>
