@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { corsJson, corsPreflight } from '@/lib/localCors';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -56,6 +57,11 @@ const CONTENT_TYPES: Record<string, string> = {
   '.dwg': 'application/acad',
 };
 
+// Produkcija didelius failus (>4,5 MB — Vercel riba) kelia per ŠĮ lokalų serverį
+export async function OPTIONS() {
+  return corsPreflight();
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -63,7 +69,7 @@ export async function POST(req: NextRequest) {
     const projectName = formData.get('projectName') as string;
     const subfolder = formData.get('subfolder') as string;
 
-    if (!file || !projectName) return NextResponse.json({ error: 'Trūksta parametrų' }, { status: 400 });
+    if (!file || !projectName) return corsJson({ error: 'Trūksta parametrų' }, 400);
 
     const ext = path.extname(file.name).toLowerCase();
     const contentType = CONTENT_TYPES[ext] ?? 'application/octet-stream';
@@ -99,13 +105,13 @@ export async function POST(req: NextRequest) {
     const r2Key = `${safeProjName}/${subfolder ?? 'DOKUMENTAI'}/${finalName}`;
     const r2Url = await uploadToR2(fileBuffer, r2Key, contentType);
 
-    return NextResponse.json({
+    return corsJson({
       success: true,
       path: localPath || r2Key,
       name: finalName,
       url: r2Url ?? undefined,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return corsJson({ error: err.message }, 500);
   }
 }

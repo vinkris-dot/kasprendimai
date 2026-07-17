@@ -205,28 +205,37 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     }
   }
 
-  // Vercel serverless priima iki ~4,5 MB užklausos kūno — didesni failai grąžina
-  // 413 dar nepasiekę mūsų kodo, todėl ribą tikrinam ir prieš siunčiant
+  // Vercel serverless priima iki ~4,5 MB — didesni failai keliami PER LOKALŲ
+  // serverį Kristinos kompiuteryje (be ribos; failas atsiduria ir projekto
+  // aplanke diske, ir R2 debesyje — matomas iš visur).
   const UPLOAD_LIMIT_BYTES = 4.4 * 1024 * 1024;
+  const LOCAL_UPLOAD_URL = 'http://localhost:3001/api/upload';
 
   async function uploadFile(file: File, subfolder: string, filename: string, onDone: (f: UploadedFile) => void, onError: (message: string) => void) {
-    if (file.size > UPLOAD_LIMIT_BYTES) {
-      onError(`Failas per didelis: ${(file.size / 1024 / 1024).toFixed(1)} MB. Įkėlimo riba — 4,5 MB. Suspauskite PDF (pvz., per Peržiūrą: Failas → Eksportuoti → Quartz filtras „Reduce File Size") ir bandykite vėl.`);
-      return;
-    }
     const form = new FormData();
     form.append('file', file);
     form.append('projectName', project!.name);
     form.append('subfolder', subfolder);
     form.append('filename', filename);
+    const isLocalApp = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const localUnreachable = () => onError(
+      `Failas ${(file.size / 1024 / 1024).toFixed(1)} MB — didesni nei 4,5 MB failai įkeliami per lokalų serverį tavo kompiuteryje, bet jo pasiekti nepavyko. Įsitikink, kad esi prie savo kompiuterio, arba suspausk PDF (Peržiūra → Eksportuoti → „Reduce File Size").`,
+    );
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: form });
-      if (!res.ok) {
-        onError(res.status === 413
-          ? 'Failas per didelis — įkėlimo riba 4,5 MB. Suspauskite PDF ir bandykite vėl.'
-          : `Klaida įkeliant failą (${res.status}).`);
-        return;
+      let res: Response;
+      if (!isLocalApp && file.size > UPLOAD_LIMIT_BYTES) {
+        // Per Vercel nepraeis (413) — iš karto per lokalų serverį
+        try { res = await fetch(LOCAL_UPLOAD_URL, { method: 'POST', body: form }); }
+        catch { localUnreachable(); return; }
+      } else {
+        res = await fetch('/api/upload', { method: 'POST', body: form });
+        if (res.status === 413) {
+          // Atsarginis kelias, jei riba pasirodė mažesnė nei tikėtasi
+          try { res = await fetch(LOCAL_UPLOAD_URL, { method: 'POST', body: form }); }
+          catch { localUnreachable(); return; }
+        }
       }
+      if (!res.ok) { onError(`Klaida įkeliant failą (${res.status}).`); return; }
       const data = await res.json();
       if (!data.url && !data.path?.startsWith('/')) {
         // Nei lokalus diskas (Vercel jo neturi), nei R2 — failas niekur neišsaugotas

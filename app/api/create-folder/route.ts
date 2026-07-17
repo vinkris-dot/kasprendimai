@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { todayLT } from '@/lib/dates';
+import { corsJson, corsPreflight } from '@/lib/localCors';
 
 const pExecFile = promisify(execFile);
 
@@ -57,17 +58,10 @@ function parseAdresas(address: string) {
 // Produkcijos puslapis (Vercel) aplanką kuria per LOKALŲ serverį Kristinos Mac'e:
 // gavęs 501 iš debesies, klientas kviečia http://localhost:3001/api/create-folder.
 // Tam šis maršrutas leidžia cross-origin užklausas iš produkcijos domeno.
-const ALLOWED_ORIGIN = 'https://kasprendimai-sigma.vercel.app';
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-const json = (data: unknown, status = 200) =>
-  NextResponse.json(data, { status, headers: CORS_HEADERS });
+const json = corsJson;
 
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+  return corsPreflight();
 }
 
 export async function POST(req: NextRequest) {
