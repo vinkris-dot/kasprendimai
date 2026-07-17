@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Realių duomenų kopija vertinimui — NEKOMITINTI
+public/ka-projektai-eval.json

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { calcTargetDate, calcStageDates, calcEffectiveStageDates, calcEffectiveTargetDate, calcCustomPartDates, validStageIds } from './defaultData';
-import { tdpBlockDays, tdpPartOffsetDays } from './schedule';
-import { SelectedParts, CustomPart } from './types';
+import { tdpBlockDays, tdpPartOffsetDays, calcLatestExpectedEnd, calcDeadlineRisk } from './schedule';
+import { SelectedParts, CustomPart, Project } from './types';
 
 // SVARBU: testai leidžiami su TZ=Europe/Vilnius (žr. package.json „test" skriptą),
 // nes datų aritmetika naudoja lokalų laiką ir rezultatai priklauso nuo juostos.
@@ -143,5 +143,58 @@ describe('calcEffectiveTargetDate', () => {
     expect(calcEffectiveTargetDate(start, base, {
       PP: { startDate: '2026-03-01', endDate: '', completed: false, notes: '' },
     })).toBe('2026-06-06');
+  });
+});
+
+const status = (startDate = '', endDate = '') => ({ startDate, endDate, completed: false, notes: '' });
+
+describe('calcLatestExpectedEnd', () => {
+  it('be faktų — vėliausia planinė pabaiga (SLD)', () => {
+    expect(calcLatestExpectedEnd(start, base, {})).toBe('2026-05-13');
+  });
+  it('anksti „baigta" Ekspertizė nenutraukia prognozės į praeitį (Statybininkų atvejis)', () => {
+    const parts = { ...base, EKSPERTIZE: true };
+    // Ekspertizė pažymėta baigta 03-01, nors SLD planas iki 05-13 — max lieka 05-13
+    expect(calcLatestExpectedEnd(start, parts, {
+      EKSPERTIZE: status('2026-02-20', '2026-03-01'),
+    })).toBe('2026-05-13');
+  });
+});
+
+describe('calcDeadlineRisk', () => {
+  const proj = (over: Partial<Project>): Project => ({
+    id: 'x', name: '', address: '', client: '', clientEmail: '',
+    activeStages: [], completedStages: [], startDate: start,
+    targetConstructionDate: '', selectedParts: base, ppByla: [], dokumentai: [],
+    motyvuotiAtsakymai: [], stageStatuses: {}, partStatuses: {}, stageAssignees: {},
+    notes: '', createdAt: '', updatedAt: '', ...over,
+  } as Project);
+
+  it('be termino — null', () => {
+    expect(calcDeadlineRisk(proj({}), '2026-01-15')).toBeNull();
+  });
+  it('terminas nepažeidžiamas — null', () => {
+    expect(calcDeadlineRisk(proj({ deadline: '2026-06-01' }), '2026-01-15')).toBeNull();
+  });
+  it('SLD prognozė viršija sutartą terminą', () => {
+    // SLD planas iki 05-13, sutarta 05-01 → viršija 12 d.
+    expect(calcDeadlineRisk(proj({ deadline: '2026-05-01' }), '2026-01-15'))
+      .toEqual({ expected: '2026-05-13', days: 12, basis: 'SLD', fact: false });
+  });
+  it('SLD gautas po termino — faktas, ne prognozė', () => {
+    expect(calcDeadlineRisk(proj({
+      deadline: '2026-05-01',
+      stageStatuses: { SLD: status('2026-04-01', '2026-05-20') },
+    }), '2026-06-01')).toEqual({ expected: '2026-05-20', days: 19, basis: 'SLD', fact: true });
+  });
+  it('nebaigtas SLD su praeities prognoze — anksčiausiai šiandien', () => {
+    expect(calcDeadlineRisk(proj({ deadline: '2026-05-01' }), '2026-06-01'))
+      .toEqual({ expected: '2026-06-01', days: 31, basis: 'SLD', fact: false });
+  });
+  it('be SLD dalies lyginama su projekto pabaiga', () => {
+    const parts = { ...base, SLD: false };
+    const r = calcDeadlineRisk(proj({ deadline: '2026-03-01', selectedParts: parts }), '2026-01-15');
+    expect(r?.basis).toBe('projektas');
+    expect(r && r.days > 0).toBe(true);
   });
 });

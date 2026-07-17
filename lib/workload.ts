@@ -5,8 +5,12 @@ import { tdpBlockDays } from './schedule';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Komandos apkrova: kiek lygiagrečių aktyvių etapų žmogus tempia.
-// Etapas, kuriam trūksta įėjimų (žr. lib/inputs.ts), yra „užblokuotas" —
-// jis laukia, o ne dirbamas, todėl į realų krūvį neskaičiuojamas.
+// Trys kaupikliai pagal proceso būseną (2026-07-17 — „vaiduoklių" išvalymas):
+//   dirbama   — etapas turi fakto pradžią → realus šios savaitės krūvis;
+//   nepradėta — aktyvus ir atrakintas, bet fakto pradžios NĖRA (vaiduoklis:
+//               arba pažymėk pradžią, arba pristabdyk projektą);
+//   laukia    — trūksta startą blokuojančių įėjimų (žr. lib/inputs.ts).
+// Perkrovos lygis skaičiuojamas tik nuo DIRBAMŲ valandų.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Darbo sąnaudos (val.) etapui/daliai pagal žmogų — Kristinos įverčiai 2026-07-15,
@@ -54,29 +58,34 @@ function stageWeeklyHours(p: Project, stageId: StageId, member: TeamMemberId): n
   return effort / (days / 7);
 }
 
+export type AssignmentState = 'dirbama' | 'nepradeta' | 'laukia';
+
 export interface StageAssignment {
   projectId: string;
   projectName: string;
   stageId: StageId;
-  blocked: boolean;  // trūksta įėjimų — dirbti dar negalima
+  state: AssignmentState;
+  blocked: boolean;  // state === 'laukia' — trūksta įėjimų, dirbti dar negalima
   missing: number;   // kiek įėjimų trūksta
   hoursPerWeek: number;
 }
 
 export interface MemberWorkload {
   assignments: StageAssignment[];
-  total: number;         // visi aktyvūs priskirti etapai
-  workable: number;      // etapai, kuriuos realiai galima dirbti
-  blocked: number;       // etapai, laukiantys įėjimų
-  workableHours: number; // val./sav. iš dirbamų etapų
-  blockedHours: number;  // val./sav., kurios „atsirakins" gavus įėjimus
+  total: number;          // visi aktyvūs priskirti etapai
+  worked: number;         // etapai su fakto pradžia — realiai dirbami
+  startable: number;      // aktyvūs be fakto pradžios — nepradėti (vaiduokliai)
+  blocked: number;        // etapai, laukiantys įėjimų
+  workedHours: number;    // val./sav. iš realiai dirbamų etapų
+  startableHours: number; // val./sav., kurios užgriūtų pradėjus nepradėtus
+  blockedHours: number;   // val./sav., kurios „atsirakins" gavus įėjimus
 }
 
 /** Etapo id → rezultato id įėjimų šablonuose. */
 const STAGE_TO_RESULT: Partial<Record<StageId, string>> = { PP_VIESIMAS: 'VIESIMAS' };
 
 export function getTeamWorkload(projects: Project[]): Record<TeamMemberId, MemberWorkload> {
-  const empty = (): MemberWorkload => ({ assignments: [], total: 0, workable: 0, blocked: 0, workableHours: 0, blockedHours: 0 });
+  const empty = (): MemberWorkload => ({ assignments: [], total: 0, worked: 0, startable: 0, blocked: 0, workedHours: 0, startableHours: 0, blockedHours: 0 });
   const result: Record<TeamMemberId, MemberWorkload> = { NR: empty(), KV: empty(), LL: empty(), EXT: empty() };
 
   for (const p of projects) {
@@ -87,6 +96,9 @@ export function getTeamWorkload(projects: Project[]): Record<TeamMemberId, Membe
       if (!active.includes(stageId)) continue;
       const resultId = STAGE_TO_RESULT[stageId] ?? stageId;
       const readiness = getResultReadiness(p, resultId);
+      // Fakto pradžia skiria realiai dirbamą etapą nuo „vaiduoklio" (aktyvus, bet nepajudėjęs)
+      const started = !!p.stageStatuses?.[stageId]?.startDate;
+      const state: AssignmentState = started ? 'dirbama' : readiness.ready ? 'nepradeta' : 'laukia';
       for (const a of assignees ?? []) {
         const mw = result[a];
         if (!mw) continue;
@@ -94,14 +106,16 @@ export function getTeamWorkload(projects: Project[]): Record<TeamMemberId, Membe
           projectId: p.id,
           projectName: projectLabel(p),
           stageId,
-          blocked: !readiness.ready,
+          state,
+          blocked: state === 'laukia',
           missing: readiness.missing,
           hoursPerWeek: stageWeeklyHours(p, stageId, a),
         };
         mw.assignments.push(assignment);
         mw.total += 1;
-        if (assignment.blocked) { mw.blocked += 1; mw.blockedHours += assignment.hoursPerWeek; }
-        else { mw.workable += 1; mw.workableHours += assignment.hoursPerWeek; }
+        if (state === 'dirbama') { mw.worked += 1; mw.workedHours += assignment.hoursPerWeek; }
+        else if (state === 'nepradeta') { mw.startable += 1; mw.startableHours += assignment.hoursPerWeek; }
+        else { mw.blocked += 1; mw.blockedHours += assignment.hoursPerWeek; }
       }
     }
   }
@@ -111,10 +125,10 @@ export function getTeamWorkload(projects: Project[]): Record<TeamMemberId, Membe
 
 export type LoadLevel = 'ok' | 'high' | 'over';
 
-/** Perkrovos lygis pagal dirbamas valandas vs savaitės pajėgumą. */
-export function loadLevel(workableHours: number, capacity: number): LoadLevel {
+/** Perkrovos lygis pagal realiai dirbamas valandas vs savaitės pajėgumą. */
+export function loadLevel(workedHours: number, capacity: number): LoadLevel {
   if (capacity <= 0) return 'ok';
-  const util = workableHours / capacity;
+  const util = workedHours / capacity;
   if (util > 1) return 'over';
   if (util >= 0.8) return 'high';
   return 'ok';

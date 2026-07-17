@@ -4,6 +4,8 @@ import { use, useEffect } from 'react';
 import Link from 'next/link';
 import { useProjects } from '@/lib/useProjects';
 import { STAGES, formatDate, calcStageDates, calcEffectiveStageDates } from '@/lib/defaultData';
+import { calcLatestExpectedEnd } from '@/lib/schedule';
+import { isProjectFinished } from '@/lib/inputs';
 import { StageId } from '@/lib/types';
 import { todayLT } from '@/lib/dates';
 
@@ -48,7 +50,8 @@ export default function KlientasPage({ params }: { params: Promise<{ id: string 
   const { projects, loaded } = useProjects();
 
   useEffect(() => {
-    if (loaded) {
+    // ?noprint=1 — peržiūra be spausdinimo dialogo
+    if (loaded && !window.location.search.includes('noprint')) {
       setTimeout(() => window.print(), 400);
     }
   }, [loaded]);
@@ -80,16 +83,14 @@ export default function KlientasPage({ params }: { params: Promise<{ id: string 
     ? currentStages.map(sid => STAGE_CLIENT_NAMES[sid as StageId] ?? sid).join(', ')
     : null;
 
-  // Effective target date
-  const stageOrder: StageId[] = ['SR', 'PP', 'PP_VIESIMAS', 'IP', 'SLD', 'TDP', 'PAKARTOTINIS', 'EKSPERTIZE'];
-  const effectiveTarget = (() => {
-    for (let i = stageOrder.length - 1; i >= 0; i--) {
-      const sid = stageOrder[i];
-      const d = effectiveDates[sid];
-      if (d) return d.endDate;
-    }
-    return project.targetConstructionDate;
-  })();
+  // Statybos pradžia klientui — VĖLIAUSIA numatoma etapų pabaiga (ne paskutinio
+  // pagal eilę: anksti pažymėtas vėlesnis etapas nebegali „pagreitinti" statybos).
+  // Nebaigto projekto data praeityje reiškia nesuvestus duomenis — klientui
+  // rodome „Tikslinama", ne klaidinančią datą.
+  const finished = isProjectFinished(project);
+  const effectiveTarget = calcLatestExpectedEnd(project.startDate, selectedParts, project.stageStatuses ?? {}, project.customParts ?? [])
+    || project.targetConstructionDate;
+  const targetDisplayable = finished || effectiveTarget >= todayLT();
 
   // Compute progress % — exclude PAKARTOTINIS (sub-stage of SLD, shouldn't inflate total)
   const progressStageIds: StageId[] = activeStageIds.filter(s => s !== 'PAKARTOTINIS');
@@ -145,7 +146,7 @@ export default function KlientasPage({ params }: { params: Promise<{ id: string 
           </div>
           <div>
             <p className="text-xs text-slate-400 uppercase tracking-wider mb-0.5">Planuojama statybos pradžia</p>
-            <p className="font-bold text-slate-900">{formatDate(effectiveTarget)}</p>
+            <p className="font-bold text-slate-900">{targetDisplayable ? formatDate(effectiveTarget) : 'Tikslinama'}</p>
           </div>
         </div>
 
@@ -240,7 +241,13 @@ export default function KlientasPage({ params }: { params: Promise<{ id: string 
                         {displayDates && (
                           <div className="text-right shrink-0">
                             {isDone ? (
-                              <p className="text-xs text-slate-400">Baigta {formatDate(displayDates.endDate)}</p>
+                              // „Baigta" su data — tik iš fakto ir tik ne ateities:
+                              // plano data čia meluotų klientui (buvo „Baigta 2026-08-12" ateityje)
+                              (() => {
+                                const factEnd = project.stageStatuses?.[stage.id]?.endDate;
+                                const showDate = factEnd && factEnd <= today;
+                                return <p className="text-xs text-slate-400">Baigta{showDate ? ` ${formatDate(factEnd)}` : ''}</p>;
+                              })()
                             ) : (
                               <>
                                 <p className="text-xs text-slate-400">{formatDate(displayDates.startDate)}</p>
@@ -290,9 +297,11 @@ export default function KlientasPage({ params }: { params: Promise<{ id: string 
                               </span>
                             )}
                           </div>
-                          {pakDates && pakIsDone && (
-                            <p className="text-xs text-slate-400 shrink-0">Baigta {formatDate(pakDates.endDate)}</p>
-                          )}
+                          {pakDates && pakIsDone && (() => {
+                            const pakFact = project.stageStatuses?.PAKARTOTINIS?.endDate;
+                            const showDate = pakFact && pakFact <= today;
+                            return <p className="text-xs text-slate-400 shrink-0">Baigta{showDate ? ` ${formatDate(pakFact)}` : ''}</p>;
+                          })()}
                         </div>
                       </div>
                     </div>

@@ -76,6 +76,7 @@ export interface DocumentItem {
   description: string;
   subfolder?: string;
   received: boolean;
+  notApplicable?: boolean; // sąlyginis dokumentas šiam projektui netaikomas — neskaičiuojamas kaip trūkstamas
   notes: string;
   orderedDate?: string;
   connectionDates?: Record<string, string>;
@@ -237,6 +238,7 @@ export interface Project {
   pu?: ProjektavimoUzduotis;
   customParts?: CustomPart[];
   deadline?: string; // YYYY-MM-DD — su užsakovu sutartas terminas (skiriasi nuo skaičiuojamos statybos pradžios)
+  replannedAt?: string; // YYYY-MM-DD — kada paskutinį kartą perbazuotas planas („Perplanuoti")
   priority?: boolean; // pirmumas — užsakovas moka extra, kad būtų pirmoje vietoje
   archived?: boolean;
   paused?: boolean;

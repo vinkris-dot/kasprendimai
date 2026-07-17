@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getResultInputs, getInputStatus, getResultReadiness, getProjectResultIds, getUnlockPriorities, getStageProcessInfo, isProjectFinished, DEFAULT_RESULT_INPUTS } from './inputs';
+import { getResultInputs, getInputStatus, getResultReadiness, getProjectResultIds, getUnlockPriorities, getStageProcessInfo, getStageToggleGuard, isProjectFinished, DEFAULT_RESULT_INPUTS } from './inputs';
 import { createDefaultProject, DEFAULT_PARTS } from './defaultData';
 import { Project, ResultInput } from './types';
 
@@ -84,10 +84,10 @@ describe('getInputStatus', () => {
 });
 
 describe('getResultReadiness', () => {
-  it('SR: startuoja iš karto — 02/03/04/07 soft, tik užbaigimui', () => {
+  it('SR: startuoja iš karto — 00/02/03/04/07 soft, tik užbaigimui (00 reikia 05/06 užsakymui)', () => {
     const p = makeProject();
-    expect(getResultReadiness(p, 'SR')).toMatchObject({ ready: true, missing: 4, hardMissing: 0, total: 4 });
-    markReceived(p, 'doc-02', 'doc-03', 'doc-04', 'doc-07');
+    expect(getResultReadiness(p, 'SR')).toMatchObject({ ready: true, missing: 5, hardMissing: 0, total: 5 });
+    markReceived(p, 'doc-00', 'doc-02', 'doc-03', 'doc-04', 'doc-07');
     expect(getResultReadiness(p, 'SR')).toMatchObject({ ready: true, missing: 0 });
   });
   it('PP: soft įėjimai starto neblokuoja — galima pradėti, bet trūksta užbaigimui', () => {
@@ -262,5 +262,95 @@ describe('isProjectFinished', () => {
       EKSPERTIZE: status('2026-05-01', '2026-06-01'),
     };
     expect(isProjectFinished(p)).toBe(true);
+  });
+});
+
+describe('getStageToggleGuard', () => {
+  const status = (startDate = '', endDate = '') => ({ startDate, endDate, completed: false, notes: '' });
+
+  it('švarus užbaigimas — be įspėjimų', () => {
+    const p = makeProject();
+    p.activeStages = ['SR'];
+    p.stageStatuses = { SR: status('2026-01-05') };
+    markReceived(p, 'doc-00', 'doc-02', 'doc-03', 'doc-04', 'doc-07'); // SR soft įėjimai gauti
+    const g = getStageToggleGuard(p, 'SR');
+    expect(g.action).toBe('complete');
+    expect(g.warnings).toEqual([]);
+    expect(g.missingStart).toBe(false);
+  });
+
+  it('užbaigimas be fakto pradžios pažymimas missingStart', () => {
+    const p = makeProject();
+    p.activeStages = ['SR'];
+    const g = getStageToggleGuard(p, 'SR');
+    expect(g.action).toBe('complete');
+    expect(g.missingStart).toBe(true);
+  });
+
+  it('SR užbaigimas be soft dokumentų — įspėja apie trūkumą užbaigimui', () => {
+    const p = makeProject();
+    p.activeStages = ['SR']; // 02/03/04/07 soft — nė vienas negautas
+    const g = getStageToggleGuard(p, 'SR');
+    expect(g.warnings.some(w => w.includes('Užbaigimui dar trūksta'))).toBe(true);
+  });
+
+  it('Ekspertizės užbaigimas prieš TDP — įspėja apie būtinas sąlygas', () => {
+    const p = makeProject();
+    p.activeStages = ['TDP', 'EKSPERTIZE']; // TDP dar vyksta
+    p.stageStatuses = { EKSPERTIZE: status('2026-07-10') };
+    const g = getStageToggleGuard(p, 'EKSPERTIZE');
+    expect(g.action).toBe('complete');
+    expect(g.warnings.some(w => w.includes('TDP baigtas'))).toBe(true);
+  });
+
+  it('baigto etapo grąžinimas — reactivate su įspėjimu apie fakto valymą', () => {
+    const p = makeProject();
+    p.activeStages = [];
+    p.completedStages = ['PP'];
+    p.stageStatuses = { PP: status('2026-02-01', '2026-04-01') };
+    const g = getStageToggleGuard(p, 'PP');
+    expect(g.action).toBe('reactivate');
+    expect(g.warnings[0]).toContain('2026-04-01');
+  });
+
+  it('užrakinto SLD aktyvavimas — įspėja apie sąlygas ir implicitDone (PP)', () => {
+    const p = makeProject();
+    // SR baigtas faktu, PP nė nepradėtas, aktyvių nėra — SLD paspaudimas
+    // padarytų PP „praėjusiu" (rodomas baigtu be fakto)
+    p.activeStages = [];
+    p.completedStages = [];
+    p.stageStatuses = { SR: status('2026-01-01', '2026-02-01') };
+    const g = getStageToggleGuard(p, 'SLD');
+    expect(g.action).toBe('activate');
+    expect(g.warnings.some(w => w.includes('užrakintas'))).toBe(true);
+    expect(g.implicitDone).toContain('PP');
+    expect(g.implicitDone).not.toContain('SR'); // jau turi fakto pabaigą
+  });
+
+  it('aktyvavimas, kai ankstesnis etapas dar aktyvus — be implicitDone', () => {
+    const p = makeProject();
+    p.activeStages = ['SR'];
+    const g = getStageToggleGuard(p, 'TDP');
+    expect(g.action).toBe('activate');
+    expect(g.implicitDone).toEqual([]);
+  });
+});
+
+describe('notApplicable dokumentai', () => {
+  it('netaikomas dokumentas įėjimo neblokuoja — būsena „yra"', () => {
+    const p = makeProject();
+    const input: ResultInput = { id: 'i', label: 'Įgaliojimas', kind: 'dokumentas', docId: 'doc-00' };
+    expect(getInputStatus(p, input)).toBe('nera');
+    p.dokumentai = p.dokumentai.map(d => d.id === 'doc-00' ? { ...d, notApplicable: true } : d);
+    expect(getInputStatus(p, input)).toBe('yra');
+  });
+  it('SLD parengtis įskaito netaikomus dokumentus', () => {
+    const p = makeProject();
+    p.activeStages = ['SLD'];
+    p.completedStages = ['PP'];
+    markReceived(p, 'doc-05', 'doc-06');
+    expect(getResultReadiness(p, 'SLD').ready).toBe(false); // trūksta 00
+    p.dokumentai = p.dokumentai.map(d => d.id === 'doc-00' ? { ...d, notApplicable: true } : d);
+    expect(getResultReadiness(p, 'SLD').ready).toBe(true);
   });
 });

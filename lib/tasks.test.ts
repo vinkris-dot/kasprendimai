@@ -78,3 +78,29 @@ describe('sekos užduotys iš duomenų (ne completedStages)', () => {
     expect(t!.sub).toContain('SLD dar derinamas');
   });
 });
+
+describe('05/06 užsakymui būtinas įgaliojimas (00)', () => {
+  it('be 00 — order-05 ir order-06 nežymimi, rodo „laukia 00 įgaliojimo"', () => {
+    const p = makeProject();
+    const tasks = getAllTasks([p]);
+    const t05 = tasks.find(t => t.taskKey === 'order-05');
+    const t06 = tasks.find(t => t.taskKey === 'order-06');
+    expect(t05?.checkable).toBe(false);
+    expect(t05?.sub).toContain('laukia 00');
+    expect(t06?.checkable).toBe(false);
+    expect(t06?.sub).toContain('laukia 00');
+  });
+  it('gavus 00 — užsakymai atrakinami', () => {
+    const p = makeProject();
+    p.dokumentai = p.dokumentai.map(d => d.id === 'doc-00' ? { ...d, received: true } : d);
+    const tasks = getAllTasks([p]);
+    expect(tasks.find(t => t.taskKey === 'order-05')?.checkable).toBe(true);
+    expect(tasks.find(t => t.taskKey === 'order-06')?.checkable).toBe(true);
+  });
+  it('00 netaikomas — užsakymai irgi atrakinami', () => {
+    const p = makeProject();
+    p.dokumentai = p.dokumentai.map(d => d.id === 'doc-00' ? { ...d, notApplicable: true } : d);
+    const tasks = getAllTasks([p]);
+    expect(tasks.find(t => t.taskKey === 'order-05')?.checkable).toBe(true);
+  });
+});

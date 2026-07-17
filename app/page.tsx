@@ -9,6 +9,8 @@ import { Project, StageId, TeamMemberId } from '@/lib/types';
 import TasksSidebar from '@/app/components/TasksSidebar';
 import AssistantPanel from '@/app/components/AssistantPanel';
 import { getUnlockPriorities, isProjectFinished } from '@/lib/inputs';
+import { calcDeadlineRisk } from '@/lib/schedule';
+import { guardedToggleStage } from '@/app/components/stageGuard';
 import DataSafety from '@/app/components/DataSafety';
 import { useNotifications } from '@/lib/useNotifications';
 import { todayLT } from '@/lib/dates';
@@ -47,7 +49,7 @@ function stageLabels(project: Project) {
 }
 
 function missingDocCount(project: Project) {
-  return project.dokumentai.filter(d => !d.received).length;
+  return project.dokumentai.filter(d => !d.received && !d.notApplicable).length;
 }
 
 type SmartAction = {
@@ -75,29 +77,32 @@ function getSmartPlan(project: Project): SmartPlan {
   const d06 = doc('doc-06');
   const d07 = doc('doc-07');
 
-  const has02 = d02?.received ?? false;
-  const has03 = d03?.received ?? false;
+  // Netaikomas dokumentas prilygsta gautam
+  const got = (d?: Project['dokumentai'][number]) => !!d && (d.received || !!d.notApplicable);
+  const has02 = got(d02);
+  const has03 = got(d03);
+  const got00 = got(d00);
 
   const chain: SmartAction[] = [];
   const parallel: SmartAction[] = [];
 
-  // Chain: 02+03 → įgaliojimas 00
+  // Chain: 02+03 → įgaliojimas 00 → 05/06 užsakymai (be įgaliojimo institucijos nepriima)
   if (!has02 || !has03) {
     const missing = [!has02 && '02 nuosavybė', !has03 && '03 sklypo ribų planas'].filter(Boolean).join(', ');
     chain.push({ priority: 'urgent', text: 'Gauti pagrindinius dokumentus', sub: missing, taskKey: 'get-02-03', checkable: false });
   }
-  if (!(d00?.received) && !ts['order-00']?.doneAt) {
+  if (!got00 && !ts['order-00']?.doneAt) {
     chain.push({ priority: 'do', text: 'Parengti įgaliojimą (00)', sub: has02 && has03 ? '02 ir 03 gauta ✓' : 'laukia 02 ir 03', taskKey: 'order-00', checkable: has02 && has03 });
   }
 
   // Parallel: can order independently
-  if (!(d07?.received) && !ts['order-07']?.doneAt) {
+  if (!got(d07) && !ts['order-07']?.doneAt) {
     parallel.push({ priority: 'do', text: 'Toponuotrauka (07)', taskKey: 'order-07', checkable: true });
   }
-  if (!(d04?.received) && !ts['order-04']?.doneAt) {
+  if (!got(d04) && !ts['order-04']?.doneAt) {
     parallel.push({ priority: 'do', text: 'Teritorijų planavimo ištrauka (04)', taskKey: 'order-04', checkable: true });
   }
-  if (d06) {
+  if (d06 && !d06.notApplicable) {
     const dates = d06.connectionDates ?? {};
     const missing = [
       !dates.vanduo && 'vanduo/nuotekos',
@@ -108,11 +113,19 @@ function getSmartPlan(project: Project): SmartPlan {
       !dates.dujos && 'dujos',
     ].filter(Boolean) as string[];
     if (missing.length > 0 && !ts['order-06']?.doneAt) {
-      parallel.push({ priority: 'do', text: 'Prisijungimo sąlygos (06)', sub: missing.join(', '), taskKey: 'order-06', checkable: true });
+      parallel.push({
+        priority: 'do', text: 'Prisijungimo sąlygos (06)',
+        sub: got00 ? missing.join(', ') : `laukia 00 įgaliojimo · ${missing.join(', ')}`,
+        taskKey: 'order-06', checkable: got00,
+      });
     }
   }
-  if (!(d05?.received) && !ts['order-05']?.doneAt) {
-    parallel.push({ priority: 'soon', text: 'SR (05)', taskKey: 'order-05', checkable: true });
+  if (!got(d05) && !ts['order-05']?.doneAt) {
+    parallel.push({
+      priority: 'soon', text: 'SR (05)',
+      sub: got00 ? undefined : 'laukia 00 įgaliojimo',
+      taskKey: 'order-05', checkable: got00,
+    });
   }
 
   return { chain, parallel };
@@ -145,7 +158,28 @@ type Alert = {
   endDate: string;
   daysLeft: number;
   kind: 'overdue' | 'today' | 'week' | 'next2weeks';
+  alsoLate?: number; // kiek TOLESNIŲ to paties projekto etapų vėluoja kartu (rodomas tik šaknies etapas)
 };
+
+/**
+ * Vėluojančių sąrašui — po vieną eilutę projektui: rodomas šaknies (labiausiai
+ * vėluojantis = ankstyviausias) etapas, tolesni to paties projekto vėlavimai
+ * turi tą pačią priežastį ir tik keltų triukšmą.
+ */
+function groupOverdueByRoot(overdue: Alert[]): Alert[] {
+  const byProject = new Map<string, Alert[]>();
+  for (const a of overdue) {
+    const arr = byProject.get(a.projectId) ?? [];
+    arr.push(a);
+    byProject.set(a.projectId, arr);
+  }
+  return [...byProject.values()]
+    .map(arr => {
+      const root = arr.reduce((m, a) => (a.daysLeft < m.daysLeft ? a : m));
+      return { ...root, alsoLate: arr.length - 1 };
+    })
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+}
 
 function buildAlerts(projects: Project[]): Alert[] {
   const today = new Date();
@@ -354,12 +388,16 @@ export default function Dashboard() {
   // Baigtas = visi pasirinkti etapai faktiškai baigti (žr. isProjectFinished),
   // ne tuščias activeStages — vidury proceso tai reiškia „niekas nedirbama".
   const activeProjects = projects.filter(p => !p.archived && !p.paused && !isProjectFinished(p));
-  const pausedProjects = projects.filter(p => !p.archived && p.paused);
+  // Pristabdyti: praėjusi kontrolės data — viršuje, tada pagal artėjančią datą, be datos — gale
+  const pausedProjects = projects
+    .filter(p => !p.archived && p.paused)
+    .sort((a, b) => (a.pauseUntil ?? '9999-12-31').localeCompare(b.pauseUntil ?? '9999-12-31'));
+  const pausedDue = pausedProjects.filter(p => p.pauseUntil && p.pauseUntil <= todayLT());
   const finishedProjects = projects.filter(p => !p.archived && !p.paused && isProjectFinished(p));
   const archivedProjects = projects.filter(p => p.archived);
 
   const alerts = buildAlerts(activeProjects);
-  const overdue = alerts.filter(a => a.kind === 'overdue');
+  const overdue = groupOverdueByRoot(alerts.filter(a => a.kind === 'overdue'));
   const today = alerts.filter(a => a.kind === 'today');
   const thisWeek = alerts.filter(a => a.kind === 'week');
   const soon = alerts.filter(a => a.kind === 'next2weeks');
@@ -595,7 +633,7 @@ export default function Dashboard() {
           <AssistantPanel projects={projects} updateProject={updateProject} toggleStage={toggleStage} finishProject={finishProject} />
 
           {/* Work overview */}
-          {(overdue.length > 0 || today.length > 0 || thisWeek.length > 0 || soon.length > 0 || dayPriorities.length > 0) && (
+          {(overdue.length > 0 || today.length > 0 || thisWeek.length > 0 || soon.length > 0 || dayPriorities.length > 0 || pausedDue.length > 0) && (
             <div className="mb-8">
               <button
                 onClick={() => setShowOverview(v => !v)}
@@ -605,6 +643,7 @@ export default function Dashboard() {
                 Darbų apžvalga
                 {overdue.length > 0 && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600 normal-case tracking-normal">{overdue.length} vėluoja</span>}
                 {thisWeek.length > 0 && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 normal-case tracking-normal">{thisWeek.length} šią sav.</span>}
+                {pausedDue.length > 0 && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 normal-case tracking-normal">{pausedDue.length} kontrolė</span>}
               </button>
               {showOverview && (
                 <div className="space-y-4">
@@ -631,7 +670,7 @@ export default function Dashboard() {
                   {overdue.length > 0 && (
                     <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                       <p className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-3">
-                        Vėluoja — {overdue.length} etap{overdue.length === 1 ? 'as' : 'ai'}
+                        Vėluoja — {overdue.length} projekt{overdue.length === 1 ? 'as' : 'ai'} (rodomas šaknies etapas)
                       </p>
                       <div className="space-y-2">
                         {overdue.map((a, i) => (
@@ -639,8 +678,29 @@ export default function Dashboard() {
                             <div className="flex items-center gap-2 min-w-0">
                               <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${a.stageBgClass} ${a.stageTextClass}`}>{a.stageShortName}</span>
                               <span className="text-sm text-slate-800 truncate">{a.projectName}</span>
+                              {(a.alsoLate ?? 0) > 0 && (
+                                <span className="text-xs text-red-400 shrink-0">+{a.alsoLate} tolesni kartu</span>
+                              )}
                             </div>
                             <span className="text-xs text-red-500 font-medium shrink-0 ml-3">{Math.abs(a.daysLeft)} d. vėluoja</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {pausedDue.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-3">
+                        Pristabdyti — kontrolės data praėjo ({pausedDue.length})
+                      </p>
+                      <div className="space-y-2">
+                        {pausedDue.map(p => (
+                          <Link key={p.id} href={`/projects/${p.id}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 hover:opacity-80 transition-opacity">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm text-slate-800 truncate">{projectLabel(p)}</span>
+                              {p.pauseReason && <span className="text-xs text-slate-500 truncate">{p.pauseReason}</span>}
+                            </div>
+                            <span className="text-xs text-amber-700 font-medium shrink-0">kontrolė: {formatDate(p.pauseUntil!)}</span>
                           </Link>
                         ))}
                       </div>
@@ -743,9 +803,15 @@ export default function Dashboard() {
                         <td className={`px-4 py-2.5 text-right whitespace-nowrap ${rowOverdue ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
                           {formatDate(project.targetConstructionDate)}{rowOverdue ? ' !' : ''}
                         </td>
-                        <td className={`px-4 py-2.5 text-right whitespace-nowrap ${dlOverdue ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
-                          {project.deadline ? formatDate(project.deadline) : '—'}
-                        </td>
+                        {(() => {
+                          const dlRisk = project.deadline ? calcDeadlineRisk(project, todayIso) : null;
+                          return (
+                            <td className={`px-4 py-2.5 text-right whitespace-nowrap ${dlOverdue || dlRisk ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
+                              {project.deadline ? formatDate(project.deadline) : '—'}
+                              {dlRisk ? <span className="block text-[10px] font-semibold">viršija {dlRisk.days} d.</span> : null}
+                            </td>
+                          );
+                        })()}
                       </tr>
                     );
                   })}
@@ -787,7 +853,10 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-amber-600 shrink-0">⏸</span>
                         <span className="text-sm font-medium text-amber-800 truncate">{project.pauseReason || 'Pristabdyta'}</span>
-                        {project.pauseUntil && <span className="text-xs text-amber-500 shrink-0">kontrolė: {formatDate(project.pauseUntil)}</span>}
+                        {project.pauseUntil && (() => {
+                          const passed = project.pauseUntil! <= todayLT();
+                          return <span className={`text-xs shrink-0 ${passed ? 'text-red-500 font-semibold' : 'text-amber-500'}`}>kontrolė: {formatDate(project.pauseUntil)}{passed ? ' — praėjo' : ''}</span>;
+                        })()}
                       </div>
                       <button onClick={e => { e.preventDefault(); updateProject(project.id, { paused: false, pauseReason: undefined, pauseUntil: undefined }); }} className="text-xs text-amber-600 hover:text-amber-800 font-medium shrink-0">Atnaujinti</button>
                     </div>
@@ -815,6 +884,14 @@ export default function Dashboard() {
                             </span>
                           ))}
                         </div>
+                        {(() => {
+                          const unansweredP = (project.motyvuotiAtsakymai ?? []).filter(a => !a.atsakyta).length;
+                          return unansweredP > 0 ? (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                              Pastabos: {unansweredP} laukia atsakymo
+                            </span>
+                          ) : null;
+                        })()}
                         {missingDocs > 0 && (
                           <button
                             onClick={e => { e.preventDefault(); setExpandedDocsId(expandedDocsId === project.id ? null : project.id); }}
@@ -863,17 +940,32 @@ export default function Dashboard() {
                         <span>{formatDate(project.startDate)}</span>
                         <div className="flex items-center gap-1">
                           {isOverdue && <span className="text-red-500 font-medium">vėluoja</span>}
-                          {!isOverdue && daysToTarget < 14 && <span className="text-amber-500 font-medium">{daysToTarget}d. liko</span>}
+                          {!isOverdue && daysToTarget < 0 && (
+                            <span className="text-slate-400 font-medium">
+                              terminas praėjo prieš {Math.abs(daysToTarget)} d.{progress === 100 ? ' — pažymėk „Baigti"' : ''}
+                            </span>
+                          )}
+                          {!isOverdue && daysToTarget >= 0 && daysToTarget < 14 && <span className="text-amber-500 font-medium">{daysToTarget}d. liko</span>}
                           <span className={isOverdue ? 'text-red-400' : ''}>{formatDate(project.targetConstructionDate)}</span>
                         </div>
                       </div>
+                      {project.replannedAt && (
+                        <div className="mt-1 text-xs text-slate-400">planas atnaujintas {formatDate(project.replannedAt)}</div>
+                      )}
                       {project.deadline && (() => {
                         const today = todayLT();
                         const dlOverdue = project.deadline < today;
+                        const dlRisk = calcDeadlineRisk(project, today);
+                        const alert = dlOverdue || !!dlRisk;
                         return (
-                          <div className={`mt-1 text-xs flex items-center gap-1 ${dlOverdue ? 'text-red-500' : 'text-slate-500'}`}>
+                          <div className={`mt-1 text-xs flex flex-wrap items-center gap-1 ${alert ? 'text-red-500' : 'text-slate-500'}`}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             Sutarta iki: <strong>{formatDate(project.deadline)}</strong>{dlOverdue ? ' (vėluoja!)' : ''}
+                            {dlRisk && (
+                              <span className="font-semibold">
+                                · {dlRisk.basis === 'SLD' ? (dlRisk.fact ? 'SLD gautas' : 'SLD prognozė') : 'prognozė'} {formatDate(dlRisk.expected)} — viršija {dlRisk.days} d.
+                              </span>
+                            )}
                           </div>
                         );
                       })()}
@@ -894,7 +986,7 @@ export default function Dashboard() {
                     <div className="px-5 pb-3 border-t border-amber-100 pt-3 bg-amber-50/50">
                       <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2">Trūkstami dokumentai</p>
                       <div className="space-y-1.5">
-                        {project.dokumentai.filter(d => !d.received).map(doc => (
+                        {project.dokumentai.filter(d => !d.received && !d.notApplicable).map(doc => (
                           <label key={doc.id} className="flex items-center gap-2.5 cursor-pointer group">
                             <input
                               type="checkbox"
@@ -956,6 +1048,7 @@ export default function Dashboard() {
                             updateProject(project.id, {
                               stageStatuses: newStatuses,
                               targetConstructionDate: calcEffectiveTargetDate(project.startDate, project.selectedParts, newStatuses, project.customParts ?? []),
+                              replannedAt: today,
                             });
                             setReplanConfirmId(null);
                           }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">Taip</button>
@@ -1105,7 +1198,7 @@ export default function Dashboard() {
                       return (
                         <button
                           key={s.id}
-                          onClick={e => { e.stopPropagation(); toggleStage(project.id, s.id); }}
+                          onClick={e => { e.stopPropagation(); guardedToggleStage(project, s.id, { toggleStage, updateProject }); }}
                           title={`${s.name} — spausti norėdami ${isOn ? 'išjungti' : 'įjungti'}`}
                           className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-all ${
                             isOn
@@ -1147,7 +1240,12 @@ export default function Dashboard() {
                         {project.name !== projectLabel(project) && <span className="text-sm text-slate-500 truncate hidden sm:block">{project.name}</span>}
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        {project.pauseUntil && <span className="text-xs text-amber-500">kontrolė: {formatDate(project.pauseUntil)}</span>}
+                        {project.pauseUntil ? (() => {
+                          const passed = project.pauseUntil! <= todayLT();
+                          return <span className={`text-xs ${passed ? 'text-red-500 font-semibold' : 'text-amber-500'}`}>kontrolė: {formatDate(project.pauseUntil)}{passed ? ' — praėjo' : ''}</span>;
+                        })() : (
+                          <span className="text-xs text-slate-400">be kontrolės datos</span>
+                        )}
                         <button onClick={() => updateProject(project.id, { paused: false, pauseReason: undefined, pauseUntil: undefined })} className="text-xs text-amber-600 hover:text-amber-800 font-medium">Atnaujinti</button>
                         <button onClick={() => setPauseModal({ projectId: project.id, reason: project.pauseReason ?? '', until: project.pauseUntil ?? '' })} className="text-xs text-slate-500 hover:text-slate-600">Redaguoti</button>
                       </div>

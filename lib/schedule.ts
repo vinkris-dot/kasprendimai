@@ -1,4 +1,4 @@
-import { SelectedParts, CustomPart, StageId, StageStatus, PartId } from './types';
+import { SelectedParts, CustomPart, StageId, StageStatus, PartId, Project } from './types';
 
 /**
  * GRAFIKO VARIKLIS — vienintelė vieta, kur gyvena etapų trukmės ir eiliškumas.
@@ -245,6 +245,74 @@ export function calcEffectiveStageDates(
 ): StageWins {
   if (!startDate) return {};
   return walkSchedule(startDate, parts, customParts, stageStatuses).stages;
+}
+
+/**
+ * Vėliausia numatoma etapų pabaiga per visą grandinę (faktai peranchoruoja).
+ * Skirtingai nei calcEffectiveTargetDate (grandinės kursorius), imamas MAX per
+ * visus etapus — kad anksti „baigtas" vėlesnis etapas (pvz., Ekspertizė prieš
+ * TDP) nenutrauktų prognozės į praeitį.
+ */
+export function calcLatestExpectedEnd(
+  startDate: string,
+  parts: SelectedParts,
+  stageStatuses: Partial<Record<StageId, StageStatus>>,
+  customParts: CustomPart[] = [],
+): string {
+  if (!startDate) return '';
+  const eff = walkSchedule(startDate, parts, customParts, stageStatuses).stages;
+  let max = '';
+  for (const v of Object.values(eff)) {
+    if (v && v.endDate > max) max = v.endDate;
+  }
+  return max;
+}
+
+export interface DeadlineRisk {
+  expected: string;            // numatoma (ar faktinė) datos riba, kuri lyginama su terminu
+  days: number;                // per kiek dienų viršijamas sutartas terminas
+  basis: 'SLD' | 'projektas';  // su kuo lyginta: SLD pabaiga ar viso projekto pabaiga
+  fact: boolean;               // true — jau įvykęs faktas, ne prognozė
+}
+
+/**
+ * Sutarto termino sargas. Kristinos semantika (2026-07-17): sutartas terminas
+ * paprastai reiškia statybos leidimo (SLD) gavimą — jei projektas turi SLD dalį,
+ * lyginama SLD prognozė/faktas; kitaip — viso projekto numatoma pabaiga.
+ * Grąžina null, kai termino nėra arba jis nepažeidžiamas.
+ */
+export function calcDeadlineRisk(project: Project, today: string): DeadlineRisk | null {
+  if (!project.deadline) return null;
+  const parts = project.selectedParts;
+  const statuses = project.stageStatuses ?? {};
+  const customParts = project.customParts ?? [];
+  let expected: string;
+  let basis: DeadlineRisk['basis'];
+  let fact: boolean;
+  if (parts.SLD) {
+    basis = 'SLD';
+    const st = statuses.SLD;
+    if (st?.endDate) {
+      expected = st.endDate;
+      fact = true;
+    } else {
+      const eff = calcEffectiveStageDates(project.startDate, parts, statuses, customParts)['SLD'];
+      if (!eff) return null;
+      // Nebaigtas etapas negali baigtis praeityje — anksčiausiai šiandien
+      expected = eff.endDate < today ? today : eff.endDate;
+      fact = false;
+    }
+  } else {
+    basis = 'projektas';
+    expected = calcLatestExpectedEnd(project.startDate, parts, statuses, customParts);
+    if (!expected) return null;
+    const anyOpen = validStageIds(parts).some(sid => !statuses[sid]?.endDate);
+    if (anyOpen && expected < today) expected = today;
+    fact = !anyOpen;
+  }
+  if (expected <= project.deadline) return null;
+  const days = Math.round((new Date(expected).getTime() - new Date(project.deadline).getTime()) / 86400000);
+  return { expected, days, basis, fact };
 }
 
 /**

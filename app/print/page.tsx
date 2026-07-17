@@ -22,8 +22,9 @@ function getActiveStageIds(project: Project): StageId[] {
 }
 
 function progressPercent(project: Project) {
-  const total = project.ppByla.length + project.dokumentai.length;
-  const done = project.ppByla.filter(i => i.done).length + project.dokumentai.filter(d => d.received).length;
+  const applicable = project.dokumentai.filter(d => !d.notApplicable);
+  const total = project.ppByla.length + applicable.length;
+  const done = project.ppByla.filter(i => i.done).length + applicable.filter(d => d.received).length;
   return total > 0 ? Math.round((done / total) * 100) : 0;
 }
 
@@ -66,8 +67,9 @@ export default function PrintAllPage() {
           const completedStages = project.completedStages ?? [];
           const plannedDates = calcStageDates(project.startDate, project.selectedParts);
           const progress = progressPercent(project);
-          const missingDocs = project.dokumentai.filter(d => !d.received).length;
-          const docsDone = project.dokumentai.filter(d => d.received).length;
+          const applicableDocs = project.dokumentai.filter(d => !d.notApplicable);
+          const missingDocs = applicableDocs.filter(d => !d.received).length;
+          const docsDone = applicableDocs.filter(d => d.received).length;
           const ppDone = project.ppByla.filter(i => i.done).length;
 
           return (
@@ -92,7 +94,7 @@ export default function PrintAllPage() {
 
               {/* Stats row */}
               <div className="flex gap-6 text-xs text-slate-500 mb-3">
-                <span>Dokumentai: <strong className={missingDocs > 0 ? 'text-amber-600' : 'text-green-600'}>{docsDone}/{project.dokumentai.length}</strong></span>
+                <span>Dokumentai: <strong className={missingDocs > 0 ? 'text-amber-600' : 'text-green-600'}>{docsDone}/{applicableDocs.length}</strong></span>
                 <span>PP byla: <strong>{ppDone}/{project.ppByla.length}</strong></span>
                 {missingDocs > 0 && <span className="text-amber-600">Trūksta {missingDocs} dok.</span>}
               </div>

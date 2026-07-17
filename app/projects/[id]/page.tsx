@@ -7,8 +7,9 @@ import { useProjects } from '@/lib/useProjects';
 import { STAGES, PROJECT_PARTS, formatDate, calcTargetDate, calcStageDates, calcEffectiveStageDates, calcCustomPartDates, TEAM_MEMBERS, projectLabel } from '@/lib/defaultData';
 import { StageId, SelectedParts, PartId, MotyvuotasAtsakymas, TeamMemberId, UploadedFile, ProjektavimoUzduotis, DEFAULT_PU, BylaSection, CustomPart } from '@/lib/types';
 import { getProjectResultIds, getResultReadiness, getStageProcessInfo, isProjectFinished, SUBMITTAL_STAGES, StageProcess, ResultReadiness } from '@/lib/inputs';
-import { TDP_PAR1, TDP_PAR2, tdpPartOffsetDays } from '@/lib/schedule';
+import { TDP_PAR1, TDP_PAR2, tdpPartOffsetDays, calcDeadlineRisk, calcLatestExpectedEnd } from '@/lib/schedule';
 import InputsTab from '@/app/components/InputsTab';
+import { guardedToggleStage } from '@/app/components/stageGuard';
 import { todayLT } from '@/lib/dates';
 
 const BYLA_SECTIONS: { id: string; label: string; partKey: string }[] = [
@@ -57,7 +58,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const router = useRouter();
   const {
     projects, loaded,
-    toggleChecklistItem, toggleDocument, updateDocumentNotes,
+    toggleChecklistItem, toggleDocument, toggleDocumentNA, updateDocumentNotes,
     toggleStage, updateProject, deleteProject, updateMotyvuotiAtsakymai,
     updateConnectionDate,
     addDocumentFile, addChecklistFile, removeDocumentFile, removeChecklistFile,
@@ -122,28 +123,22 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const plannedDates = calcStageDates(project.startDate, selectedParts, customParts);
   const effectiveDates = calcEffectiveStageDates(project.startDate, selectedParts, project.stageStatuses ?? {}, customParts);
   const customPartDates = calcCustomPartDates(project.startDate, selectedParts, customParts);
-  // Efektyvi statybos pradžios data — paskutinio aktyvaus etapo prognozuojama pabaiga
+  const projectDone = isProjectFinished(project);
+  // Efektyvi statybos pradžios data — VĖLIAUSIA numatoma etapų pabaiga (max per
+  // visus etapus), kad anksti pažymėtas vėlesnis etapas nenutrauktų prognozės
+  // į praeitį. Nebaigtas projektas negali baigtis praeityje — riba šiandien.
   const effectiveTargetDate = (() => {
-    const stageOrder: StageId[] = ['SR', 'PP', 'PP_VIESIMAS', 'IP', 'SLD', 'TDP', 'PAKARTOTINIS', 'EKSPERTIZE'];
-    // Pirma tikrinam aktyvius etapus: jei yra faktinė pradžia, skaičiuojam prognozę
-    for (let i = stageOrder.length - 1; i >= 0; i--) {
-      const sid = stageOrder[i];
-      const planned = plannedDates[sid];
-      const status = project.stageStatuses?.[sid];
-      if (!planned) continue;
-      if (status?.startDate && !status?.endDate) {
-        const dur = new Date(planned.endDate).getTime() - new Date(planned.startDate).getTime();
-        return new Date(new Date(status.startDate).getTime() + dur).toISOString().slice(0, 10);
-      }
-      if (status?.endDate) return status.endDate;
-      const d = effectiveDates[sid];
-      if (d) return d.endDate;
-    }
-    return project.targetConstructionDate;
+    const latest = calcLatestExpectedEnd(project.startDate, selectedParts, project.stageStatuses ?? {}, customParts);
+    if (!latest) return project.targetConstructionDate;
+    const today = todayLT();
+    return !projectDone && latest < today ? today : latest;
   })();
+  const deadlineRisk = calcDeadlineRisk(project, todayLT());
 
   const ppDone = project.ppByla.filter(i => i.done).length;
-  const docsDone = project.dokumentai.filter(d => d.received).length;
+  // Netaikomi dokumentai neskaičiuojami nei kaip gauti, nei kaip trūkstami
+  const applicableDocs = project.dokumentai.filter(d => !d.notApplicable);
+  const docsDone = applicableDocs.filter(d => d.received).length;
   const ppCategories = Array.from(new Set(project.ppByla.map(i => i.category)));
 
   // All TDP sub-parts (for toggles)
@@ -270,16 +265,13 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const readyResults = getProjectResultIds(project).map(rid => getResultReadiness(project, rid));
   const readyCount = readyResults.filter(r => r.ready).length;
 
-  // „Baigtas" — tik kai visi pasirinkti etapai faktiškai baigti, ne kai
-  // tiesiog nėra aktyvių (vidury proceso tai reiškia „niekas nedirbama").
-  const projectDone = isProjectFinished(project);
   const stageDone = (sid: StageId) => getStageProcessInfo(project, sid).state === 'baigta';
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'grafikas', label: 'Grafikas' },
     { id: 'iejimai', label: `Įėjimai (${readyCount}/${readyResults.length} ✓)` },
     { id: 'pu', label: 'PU' },
-    { id: 'dokumentai', label: `Dokumentai (${docsDone}/${project.dokumentai.length})` },
+    { id: 'dokumentai', label: `Dokumentai (${docsDone}/${applicableDocs.length})` },
     { id: 'pp', label: `PP sąrašas (${ppDone}/${project.ppByla.length})` },
     { id: 'motyvuoti', label: `Mot. atsakymai${project.motyvuotiAtsakymai.length > 0 ? ` (${project.motyvuotiAtsakymai.length})` : ''}` },
     { id: 'bylos', label: `Bylos${isBylosComplete ? ' ✓' : ` (${bylaDone}/${allRequiredSections.length})`}` },
@@ -522,14 +514,26 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               {effectiveTargetDate !== project.targetConstructionDate && (
                 <p className="text-xs text-amber-600 mt-0.5">Numatoma: <strong>{formatDate(effectiveTargetDate)}</strong></p>
               )}
+              {project.replannedAt && (
+                <p className="text-[11px] text-slate-400 mt-0.5">planas atnaujintas {formatDate(project.replannedAt)}</p>
+              )}
             </div>
             {project.deadline && (() => {
               const today = todayLT();
               const overdue = project.deadline < today && !projectDone;
+              const alert = overdue || !!deadlineRisk;
               return (
-                <div className={`border rounded-xl px-4 py-2.5 mb-2 ${overdue ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
-                  <p className={`text-xs ${overdue ? 'text-red-500' : 'text-slate-400'}`}>Sutartas terminas{overdue ? ' — vėluoja!' : ''}</p>
-                  <p className={`text-base font-bold ${overdue ? 'text-red-700' : 'text-slate-900'}`}>{formatDate(project.deadline)}</p>
+                <div className={`border rounded-xl px-4 py-2.5 mb-2 ${alert ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
+                  <p className={`text-xs ${alert ? 'text-red-500' : 'text-slate-400'}`}>Sutartas terminas{overdue ? ' — vėluoja!' : ''}</p>
+                  <p className={`text-base font-bold ${alert ? 'text-red-700' : 'text-slate-900'}`}>{formatDate(project.deadline)}</p>
+                  {deadlineRisk && (
+                    <p className="text-xs text-red-600 mt-0.5">
+                      {deadlineRisk.basis === 'SLD'
+                        ? (deadlineRisk.fact ? 'SLD gautas' : 'SLD prognozė')
+                        : (deadlineRisk.fact ? 'Baigta' : 'Prognozė')}
+                      : <strong>{formatDate(deadlineRisk.expected)}</strong> — viršija {deadlineRisk.days} d.
+                    </p>
+                  )}
                 </div>
               );
             })()}
@@ -586,7 +590,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             return (
               <button
                 key={stage.id}
-                onClick={() => toggleStage(project.id, stage.id as StageId)}
+                onClick={() => guardedToggleStage(project, stage.id as StageId, { toggleStage, updateProject })}
                 title={isCurrent ? 'Paspausti → pažymėti baigtu'
                   : done ? 'Paspausti → pašalinti'
                   : hardLeft ? `Laukia: ${hardLeft} · paspausti → pradėti`
@@ -611,7 +615,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       {/* Warnings */}
       {(() => {
         const today = new Date(); today.setHours(0,0,0,0);
-        const missingDocs = project.dokumentai.filter(d => !d.received);
+        const missingDocs = project.dokumentai.filter(d => !d.received && !d.notApplicable);
         const overdueStages = activeStages.filter(s => {
           const planned = plannedDates[s.id as StageId];
           if (!planned?.endDate) return false;
@@ -649,6 +653,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
                 <p className="text-sm text-amber-700 font-medium mb-1">Trūksta {missingDocs.length} dokumentų</p>
                 <p className="text-xs text-amber-500">{missingDocs.slice(0,3).map(d => d.name).join(', ')}{missingDocs.length > 3 ? ` ir dar ${missingDocs.length - 3}...` : ''}</p>
+                {/* Kas iš jų realiai blokuoja SLD pridavimą — kad baneris nerėktų be reikalo */}
+                {selectedParts.SLD && !stageDone('SLD') && (() => {
+                  const hardDocs = getResultReadiness(project, 'SLD').inputs
+                    .filter(i => i.status !== 'yra' && !i.input.soft && i.input.docId)
+                    .map(i => i.input.label);
+                  return (
+                    <p className={`text-xs mt-1.5 font-medium ${hardDocs.length ? 'text-amber-700' : 'text-emerald-600'}`}>
+                      {hardDocs.length
+                        ? `SLD pridavimui trūksta: ${hardDocs.join(', ')}`
+                        : 'SLD pridavimui dokumentų netrūksta'}
+                    </p>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -945,11 +962,28 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     const planned = plannedDates[stage.id as StageId];
                     const dur = planned ? new Date(planned.endDate).getTime() - new Date(planned.startDate).getTime() : 0;
                     const forecast = dur ? new Date(new Date(status.startDate).getTime() + dur).toISOString().slice(0, 10) : null;
+                    // Pridavimo ciklo būsena iš pastabų: priduota → grįžo su pastabomis
+                    // (laukia MŪSŲ) → atsakyta / pakartotinai laukiama atsakymo
+                    const pastabos = (stage.id === 'SLD' || stage.id === 'PAKARTOTINIS') ? (project.motyvuotiAtsakymai ?? []) : [];
+                    const unansweredP = pastabos.filter(a => !a.atsakyta);
+                    if (submittalStage && unansweredP.length > 0) {
+                      return (
+                        <div className="mb-3 text-xs bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-semibold text-orange-700">Priduota {formatDate(status.startDate)} — grįžo su pastabomis ({unansweredP.length})</span>
+                            <span className="text-orange-600">laukia mūsų atsakymo</span>
+                            <button onClick={() => setTab('motyvuoti')} className="ml-auto text-orange-600 underline hover:text-orange-800">Mot. atsakymai</button>
+                          </div>
+                        </div>
+                      );
+                    }
                     return submittalStage ? (
                       <div className="mb-3 text-xs bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <span className="font-semibold text-indigo-700">Priduota {formatDate(status.startDate)}</span>
-                          <span className="text-indigo-500">— laukiama atsakymo{forecast ? `, numatoma iki ${formatDate(forecast)}` : ''}</span>
+                          <span className="text-indigo-500">
+                            — {pastabos.length > 0 ? `pastabos atsakytos (${pastabos.length}), ` : ''}laukiama atsakymo{forecast ? `, numatoma iki ${formatDate(forecast)}` : ''}
+                          </span>
                           {names && <span className="text-indigo-400 ml-auto">seka: {names}</span>}
                         </div>
                       </div>
@@ -991,6 +1025,23 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   );
                 })()}
 
+                {/* Pastabų ciklas be fakto pradžios (Kopų atvejis): pastabos gautos —
+                    vadinasi, SLD buvo priduotas, nors grafike pradžia nesuvesta */}
+                {stage.id === 'SLD' && !status?.startDate && !status?.endDate && !isPast && (() => {
+                  const unansweredP = (project.motyvuotiAtsakymai ?? []).filter(a => !a.atsakyta);
+                  if (unansweredP.length === 0) return null;
+                  const oldest = unansweredP.map(a => a.date).filter(Boolean).sort()[0];
+                  return (
+                    <div className="mb-3 text-xs bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-semibold text-orange-700">
+                        Gautos pastabos ({unansweredP.length}) — laukia mūsų atsakymo{oldest ? ` nuo ${formatDate(oldest)}` : ''}
+                      </span>
+                      <span className="text-orange-500">SLD priduotas anksčiau — pažymėk „Faktas: pradžia"</span>
+                      <button onClick={() => setTab('motyvuoti')} className="ml-auto text-orange-600 underline hover:text-orange-800">Mot. atsakymai</button>
+                    </div>
+                  );
+                })()}
+
                 {/* Būsimo etapo atrakinimas: kas dar užrakinta / galima pradėti anksčiau */}
                 {!isCurrent && !isPast && !status?.endDate && (() => {
                   if (procInfo.state === 'galima') {
@@ -998,7 +1049,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       <div className="mb-3 text-xs bg-sky-50 border border-sky-100 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="font-semibold text-sky-700">Sąlygos startui įvykdytos</span>
                         <button
-                          onClick={() => toggleStage(project.id, stage.id as StageId)}
+                          onClick={() => guardedToggleStage(project, stage.id as StageId, { toggleStage, updateProject })}
                           className="ml-auto text-[11px] font-semibold bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-2.5 py-1 transition-colors"
                         >
                           Pradėti dabar
@@ -1052,10 +1103,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     {/* Baigti šiandien */}
                     {isCurrent && !status?.endDate && (
                       <button
-                        onClick={() => {
-                          // toggleStage now also sets endDate, so just call it
-                          toggleStage(project.id, stage.id as StageId);
-                        }}
+                        onClick={() => guardedToggleStage(project, stage.id as StageId, { toggleStage, updateProject })}
                         className="w-full mb-2 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1.5"
                       >
                         ✓ Baigti šiandien
@@ -1367,24 +1415,40 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               <div
                 key={doc.id}
                 className={`bg-white rounded-xl border p-4 transition-colors ${
-                  doc.received ? 'border-green-200' : 'border-slate-200'
+                  doc.notApplicable ? 'border-slate-100 opacity-60' : doc.received ? 'border-green-200' : 'border-slate-200'
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
                     checked={doc.received}
+                    disabled={!!doc.notApplicable}
                     onChange={() => toggleDocument(project.id, doc.id)}
                     className="mt-0.5 h-4 w-4 accent-green-600 flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded ${
-                        doc.received ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+                        doc.received && !doc.notApplicable ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
                       }`}>{doc.number}</span>
-                      <span className={`text-sm font-medium flex-1 ${doc.received ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                      <span className={`text-sm font-medium flex-1 ${
+                        doc.notApplicable ? 'text-slate-400' : doc.received ? 'text-slate-400 line-through' : 'text-slate-800'
+                      }`}>
                         {doc.name}
                       </span>
+                      <button
+                        onClick={() => toggleDocumentNA(project.id, doc.id)}
+                        className={`text-[11px] px-2 py-0.5 rounded-full border flex-shrink-0 transition-colors ${
+                          doc.notApplicable
+                            ? 'bg-slate-200 text-slate-600 border-slate-300 font-medium'
+                            : 'text-slate-300 border-slate-200 hover:text-slate-500 hover:border-slate-300'
+                        }`}
+                        title={doc.notApplicable
+                          ? 'Grąžinti į taikomus dokumentus'
+                          : 'Šiam projektui netaikomas — nebus skaičiuojamas kaip trūkstamas'}
+                      >
+                        netaikoma
+                      </button>
                       <label className="cursor-pointer text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0" title="Pridėti failą">
                         <input type="file" className="hidden" onChange={e => {
                           const f = e.target.files?.[0]; if (!f) return;
@@ -1540,17 +1604,17 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             )}
           </div>
 
-          {/* Missing summary */}
+          {/* Missing summary — netaikomi dokumentai neskaičiuojami */}
           <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
-            {project.dokumentai.every(d => d.received) ? (
-              <p className="text-sm text-green-700 font-medium">✓ Visi dokumentai gauti!</p>
+            {applicableDocs.every(d => d.received) ? (
+              <p className="text-sm text-green-700 font-medium">✓ Visi taikomi dokumentai gauti!</p>
             ) : (
               <>
                 <p className="text-sm font-semibold text-amber-800 mb-2">
-                  Trūksta {project.dokumentai.filter(d => !d.received).length} dokumentų:
+                  Trūksta {applicableDocs.filter(d => !d.received).length} dokumentų:
                 </p>
                 <div className="space-y-1">
-                  {project.dokumentai.filter(d => !d.received).map(d => (
+                  {applicableDocs.filter(d => !d.received).map(d => (
                     <p key={d.id} className="text-xs text-amber-700">
                       • <strong>{d.number}.</strong> {d.name}
                     </p>

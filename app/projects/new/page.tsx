@@ -9,14 +9,20 @@ import { SelectedParts, PartId, StageId, ProjektavimoUzduotis, DEFAULT_PU } from
 import { TDP_PAR1, TDP_PAR2 } from '@/lib/schedule';
 import { todayLT } from '@/lib/dates';
 
+/** Numerių palyginimui tarpai nesvarbūs: „KAS 2607/01" ir „KAS2607/01" — tas pats. */
+function normalizeProjectNumber(n: string): string {
+  return n.replace(/\s+/g, '').toUpperCase();
+}
+
 function suggestProjectNumber(existingNumbers: (string | undefined)[]): string {
   const now = new Date();
   const yy = String(now.getFullYear()).slice(2);
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const prefix = `KAS ${yy}${mm}/`;
+  const prefixNorm = normalizeProjectNumber(prefix);
   const used = existingNumbers
-    .filter((n): n is string => !!n && n.startsWith(prefix))
-    .map(n => parseInt(n.replace(prefix, '')) || 0);
+    .filter((n): n is string => !!n && normalizeProjectNumber(n).startsWith(prefixNorm))
+    .map(n => parseInt(normalizeProjectNumber(n).slice(prefixNorm.length)) || 0);
   const next = used.length > 0 ? Math.max(...used) + 1 : 1;
   return `${prefix}${String(next).padStart(2, '0')}`;
 }
@@ -85,6 +91,24 @@ export default function NewProject() {
   const targetDate = useMemo(() => calcTargetDate(startDate, parts), [startDate, parts]);
   const stageDates = useMemo(() => (startDate ? calcStageDates(startDate, parts) : {}), [startDate, parts]);
 
+  // Numerio dublikato patikra (tarpai nesvarbūs) — realiu atveju „KAS 2607/01"
+  // buvo pasiūlytas, nors „KAS2607/01" jau egzistavo
+  const effectiveNumber = projectNumber.trim() || suggested;
+  const duplicateNumber = useMemo(() => {
+    const norm = normalizeProjectNumber(effectiveNumber);
+    return norm.length > 0 && projects.some(p => p.projectNumber && normalizeProjectNumber(p.projectNumber) === norm);
+  }, [effectiveNumber, projects]);
+
+  // Sutarto termino sargas dar kūrimo metu: terminas = SLD gavimas (jei SLD
+  // pasirinktas), kitaip — apskaičiuota statybos pradžia
+  const deadlineConflict = useMemo(() => {
+    if (!deadline) return null;
+    const basisDate = parts.SLD ? stageDates['SLD']?.endDate : targetDate;
+    if (!basisDate || basisDate <= deadline) return null;
+    const days = Math.round((new Date(basisDate).getTime() - new Date(deadline).getTime()) / 86400000);
+    return { basisDate, days, basis: parts.SLD ? 'SLD pagal planą' : 'Planas' };
+  }, [deadline, parts.SLD, stageDates, targetDate]);
+
   function togglePart(id: PartId) {
     setParts(p => ({ ...p, [id]: !p[id] }));
   }
@@ -117,6 +141,7 @@ export default function NewProject() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !address || !client || !startDate) return;
+    if (duplicateNumber && !window.confirm(`Projekto Nr. „${effectiveNumber}" jau naudojamas kitame projekte.\nVis tiek sukurti su tuo pačiu numeriu?`)) return;
     const project = addProject({ name, address, client, clientEmail, startDate, selectedParts: parts, pu: showPU ? pu : undefined, projectNumber: projectNumber.trim() || suggested, deadline: deadline || undefined, priority: isPriority });
     // Kompiuterio aplankas pagal firmos standartą + šablonų užpildymas (veikia tik lokaliai;
     // Vercel grąžina 501 ir tyliai praleidžiama — aplanką galima sukurti vėliau mygtuku).
@@ -170,6 +195,9 @@ export default function NewProject() {
               )}
             </div>
             <p className="text-xs text-slate-400 mt-1">Formatas: KAS YYMM/NN — pvz. {suggested}</p>
+            {duplicateNumber && (
+              <p className="text-xs text-red-600 mt-1 font-medium">Numeris „{effectiveNumber}" jau naudojamas kitame projekte.</p>
+            )}
           </div>
 
           <div>
@@ -779,6 +807,14 @@ export default function NewProject() {
               {parts.TDP && ' TDP vyksta lygiagrečiai su SLD.'}
               {parts.TDP && ' Ekspertizė (~4 sav.) įtraukta automatiškai.'}
             </p>
+          )}
+          {deadlineConflict && (
+            <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <p className="text-xs font-semibold text-red-700">
+                {deadlineConflict.basis}: {formatDate(deadlineConflict.basisDate)} — viršija sutartą terminą {deadlineConflict.days} d.
+              </p>
+              <p className="text-xs text-red-500 mt-0.5">Sutarta {formatDate(deadline)}. Arba trumpink apimtį, arba derink terminą su užsakovu.</p>
+            </div>
           )}
         </div>
 

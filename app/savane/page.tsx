@@ -66,7 +66,7 @@ export default function SavanePage() {
   const active = projects.filter(p => !p.archived && !p.paused && (p.activeStages ?? []).length > 0);
 
   // ── Overdue stages ───────────────────────────────────────────────────────
-  const overdueStages: { project: Project; stageId: StageId; daysLate: number }[] = [];
+  const overdueAll: { project: Project; stageId: StageId; daysLate: number }[] = [];
   for (const p of active) {
     // Efektyvios datos — vėlavimas nuo fakto, ne nuo pasenusio pradinio plano
     const planned = calcEffectiveStageDates(p.startDate, p.selectedParts, p.stageStatuses ?? {}, p.customParts ?? []);
@@ -76,11 +76,26 @@ export default function SavanePage() {
       const end = new Date(d.endDate);
       end.setHours(0, 0, 0, 0);
       if (end < TODAY) {
-        overdueStages.push({ project: p, stageId: sid as StageId, daysLate: Math.round((TODAY.getTime() - end.getTime()) / 86400000) });
+        overdueAll.push({ project: p, stageId: sid as StageId, daysLate: Math.round((TODAY.getTime() - end.getTime()) / 86400000) });
       }
     }
   }
-  overdueStages.sort((a, b) => b.daysLate - a.daysLate);
+  // Po vieną eilutę projektui — šaknies (labiausiai vėluojantis) etapas; tolesni
+  // to paties projekto vėlavimai turi tą pačią priežastį, rodomas tik skaičius.
+  const overdueStages = (() => {
+    const byProject = new Map<string, typeof overdueAll>();
+    for (const o of overdueAll) {
+      const arr = byProject.get(o.project.id) ?? [];
+      arr.push(o);
+      byProject.set(o.project.id, arr);
+    }
+    return [...byProject.values()]
+      .map(arr => {
+        const root = arr.reduce((m, o) => (o.daysLate > m.daysLate ? o : m));
+        return { ...root, alsoLate: arr.length - 1 };
+      })
+      .sort((a, b) => b.daysLate - a.daysLate);
+  })();
 
   // ── Stages ending this week ──────────────────────────────────────────────
   const thisWeekStages: { project: Project; stageId: StageId; endDate: string; daysLeft: number }[] = [];
@@ -104,15 +119,26 @@ export default function SavanePage() {
   const { overdue: overdueTasks, today: todayTasks, thisWeek: weekTasks } = groupByUrgency(allTasks);
   const urgentTasks = [...overdueTasks, ...todayTasks, ...weekTasks];
 
-  // ── Missing docs ─────────────────────────────────────────────────────────
+  // ── Missing docs (netaikomi neskaičiuojami) ─────────────────────────────
   const missingByProject = active
-    .map(p => ({ project: p, missing: p.dokumentai.filter(d => !d.received) }))
+    .map(p => ({ project: p, missing: p.dokumentai.filter(d => !d.received && !d.notApplicable) }))
     .filter(x => x.missing.length > 0)
     .sort((a, b) => b.missing.length - a.missing.length)
     .slice(0, 8);
 
   // ── Team workload ────────────────────────────────────────────────────────
   const workload = getTeamWorkload(projects);
+
+  // ── Pristabdytų kontrolė: praėjusi arba šią savaitę sueinanti kontrolės data ──
+  // Lokalus formatavimas (ne toISOString) — UTC poslinkis naktį nuneštų per dieną
+  const fmtLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const todayStr = fmtLocal(TODAY);
+  const weekEndStr = fmtLocal(WEEK_END);
+  const pausedAll = projects.filter(p => !p.archived && p.paused);
+  const pausedDue = pausedAll
+    .filter(p => p.pauseUntil && p.pauseUntil <= weekEndStr)
+    .sort((a, b) => (a.pauseUntil ?? '').localeCompare(b.pauseUntil ?? ''));
+  const pausedNoDate = pausedAll.filter(p => !p.pauseUntil).length;
 
   const todayFormatted = dateStr(TODAY);
   const weekEndFormatted = dateStr(WEEK_END);
@@ -146,9 +172,9 @@ export default function SavanePage() {
 
       {/* Overdue */}
       {overdueStages.length > 0 && (
-        <Section title={`Vėluojantys etapai (${overdueStages.length})`} color="bg-red-50 border-red-100 text-red-800" defaultOpen={overdueStages.length <= 5}>
+        <Section title={`Vėluoja (${overdueStages.length}) — rodomas šaknies etapas`} color="bg-red-50 border-red-100 text-red-800" defaultOpen={overdueStages.length <= 5}>
           <div className="space-y-2">
-            {overdueStages.map(({ project, stageId, daysLate }) => {
+            {overdueStages.map(({ project, stageId, daysLate, alsoLate }) => {
               const stage = STAGES.find(s => s.id === stageId);
               return (
                 <Link key={`${project.id}-${stageId}`} href={`/projects/${project.id}`}
@@ -156,6 +182,7 @@ export default function SavanePage() {
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${stage?.bgClass} ${stage?.textClass}`}>{stage?.shortName}</span>
                     <span className="text-sm text-slate-800 truncate group-hover:text-red-700">{projectLabel(project)}</span>
+                    {alsoLate > 0 && <span className="text-xs text-red-400 shrink-0">+{alsoLate} tolesni kartu</span>}
                   </div>
                   <span className="text-sm font-semibold text-red-500 shrink-0 ml-4">{daysLate} d. vėluoja</span>
                 </Link>
@@ -202,8 +229,8 @@ export default function SavanePage() {
                   <span className="text-sm text-slate-700 group-hover:text-slate-900">{t.label}</span>
                 </div>
                 {t.dueDate && (
-                  <span className={`text-xs font-medium shrink-0 ${t.dueDate < TODAY.toISOString().slice(0,10) ? 'text-red-500' : 'text-slate-500'}`}>
-                    {t.dueDate === TODAY.toISOString().slice(0,10) ? 'šiandien' : t.dueDate}
+                  <span className={`text-xs font-medium shrink-0 ${t.dueDate < todayStr ? 'text-red-500' : 'text-slate-500'}`}>
+                    {t.dueDate === todayStr ? 'šiandien' : t.dueDate}
                   </span>
                 )}
               </Link>
@@ -240,21 +267,52 @@ export default function SavanePage() {
         </Section>
       )}
 
+      {/* Pristabdytų kontrolė — žadintuvas */}
+      {(pausedDue.length > 0 || pausedNoDate > 0) && (
+        <Section title={`Pristabdytų kontrolė${pausedDue.length ? ` (${pausedDue.length})` : ''}`} color="bg-amber-50 border-amber-100 text-amber-800">
+          <div className="space-y-2">
+            {pausedDue.map(p => {
+              const passed = (p.pauseUntil ?? '') < todayStr;
+              const isToday = p.pauseUntil === todayStr;
+              return (
+                <Link key={p.id} href={`/projects/${p.id}`}
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 p-3 rounded-lg hover:bg-amber-50 transition-colors group">
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-slate-800 group-hover:text-amber-800">{projectLabel(p)}</span>
+                    {p.pauseReason && <span className="text-xs text-slate-500 ml-2">{p.pauseReason}</span>}
+                  </div>
+                  <span className={`text-xs font-semibold shrink-0 ${passed ? 'text-red-500' : 'text-amber-700'}`}>
+                    kontrolė: {formatDate(p.pauseUntil!)}{passed ? ' — praėjo' : isToday ? ' — šiandien' : ''}
+                  </span>
+                </Link>
+              );
+            })}
+            {pausedNoDate > 0 && (
+              <p className="text-xs text-slate-400 pl-3 pt-1">
+                Dar {pausedNoDate} pristabdyt{pausedNoDate === 1 ? 'as projektas' : 'i projektai'} be kontrolės datos — nustatyk ją pauzės lange, kad projektas neiškristų iš radaro.
+              </p>
+            )}
+          </div>
+        </Section>
+      )}
+
       {/* Team workload */}
       <Section title="Komandos apkrova" color="bg-slate-50 border-slate-100 text-slate-700">
         <p className="text-xs text-slate-500 mb-4">
-          Apkrova = dirbamų etapų darbo valandos per savaitę (etapo sąnaudos ÷ trukmė) prieš žmogaus pajėgumą.
+          Apkrova = realiai dirbamų etapų (yra fakto pradžia) valandos per savaitę prieš žmogaus pajėgumą.
+          Nepradėta = aktyvūs etapai be fakto pradžios — arba pažymėk pradžią, arba pristabdyk projektą.
           Laukia = valandos, kurios atsirakins gavus trūkstamus įėjimus. Perkrauta — virš 100 % pajėgumo, daug — nuo 80 %.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {TEAM_MEMBERS.filter(m => m.id !== 'EXT').map(m => {
             const mw = workload[m.id];
             const cap = WEEKLY_CAPACITY[m.id];
-            const level: LoadLevel = loadLevel(mw.workableHours, cap);
+            const level: LoadLevel = loadLevel(mw.workedHours, cap);
             const levelColor = level === 'over' ? 'bg-red-500' : level === 'high' ? 'bg-amber-400' : 'bg-emerald-500';
             const levelText = level === 'over' ? 'text-red-600' : level === 'high' ? 'text-amber-600' : 'text-emerald-600';
             const levelLabel = level === 'over' ? 'perkrauta' : level === 'high' ? 'daug' : 'ok';
-            const wh = Math.round(mw.workableHours);
+            const wh = Math.round(mw.workedHours);
+            const sh = Math.round(mw.startableHours);
             const bh = Math.round(mw.blockedHours);
             // Grupuojam pagal projektą sąrašui
             const byProject = new Map<string, { name: string; stages: StageAssignment[] }>();
@@ -263,9 +321,9 @@ export default function SavanePage() {
               if (e) e.stages.push(a);
               else byProject.set(a.projectId, { name: a.projectName, stages: [a] });
             }
-            // Dirbami projektai viršuje, laukiantys įėjimų — žemiau
+            // Realiai dirbami projektai viršuje, nepradėti/laukiantys — žemiau
             const items = [...byProject.entries()].sort(([, a], [, b]) =>
-              Number(b.stages.some(s => !s.blocked)) - Number(a.stages.some(s => !s.blocked)));
+              Number(b.stages.some(s => s.state === 'dirbama')) - Number(a.stages.some(s => s.state === 'dirbama')));
             return (
               <div key={m.id} className="space-y-2">
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${m.color} ${m.textColor}`}>
@@ -275,14 +333,15 @@ export default function SavanePage() {
                     {wh}/{cap} val.
                   </span>
                 </div>
-                {/* Apkrovos juosta pajėgumo atžvilgiu: dirbamos val. (spalva pagal lygį) + laukiančios (pilka) */}
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex" title={`${wh} val./sav. dirbama, ${bh} val. laukia įėjimų, pajėgumas ${cap} val./sav.`}>
-                  <div className={`${levelColor} h-full`} style={{ width: `${Math.min(100, (mw.workableHours / cap) * 100)}%` }} />
-                  <div className="bg-slate-300 h-full" style={{ width: `${Math.max(0, Math.min(100 - (mw.workableHours / cap) * 100, (mw.blockedHours / cap) * 100))}%` }} />
+                {/* Apkrovos juosta pajėgumo atžvilgiu: dirbama (spalva pagal lygį) + nepradėta (gintarinė) + laukia (pilka) */}
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex" title={`${wh} val./sav. dirbama, ${sh} val. nepradėta, ${bh} val. laukia įėjimų, pajėgumas ${cap} val./sav.`}>
+                  <div className={`${levelColor} h-full`} style={{ width: `${Math.min(100, (mw.workedHours / cap) * 100)}%` }} />
+                  <div className="bg-amber-200 h-full" style={{ width: `${Math.max(0, Math.min(100 - (mw.workedHours / cap) * 100, (mw.startableHours / cap) * 100))}%` }} />
+                  <div className="bg-slate-300 h-full" style={{ width: `${Math.max(0, Math.min(100 - ((mw.workedHours + mw.startableHours) / cap) * 100, (mw.blockedHours / cap) * 100))}%` }} />
                 </div>
                 <p className={`text-[11px] pl-1 ${level !== 'ok' ? `font-semibold ${levelText}` : 'text-slate-500'}`}>
-                  {wh} val./sav. iš {cap} · {bh > 0 ? `+${bh} val. laukia · ` : ''}{levelLabel}
-                  <span className="text-slate-300"> · {mw.workable}/{mw.total} etapai</span>
+                  {wh} val./sav. iš {cap} · {sh > 0 ? `+${sh} val. nepradėta · ` : ''}{bh > 0 ? `+${bh} val. laukia · ` : ''}{levelLabel}
+                  <span className="text-slate-300"> · {mw.worked}/{mw.total} etapai dirbami</span>
                 </p>
                 {items.length === 0 ? (
                   <p className="text-xs text-slate-300 pl-1">Nepriskirta</p>
@@ -295,13 +354,18 @@ export default function SavanePage() {
                           {stages.map(a => {
                             const s = STAGES.find(st => st.id === a.stageId);
                             if (!s) return null;
+                            const suffix = a.state === 'laukia' ? ' (laukia)' : a.state === 'nepradeta' ? ' (nepradėta)' : '';
                             return (
                               <span
                                 key={a.stageId}
-                                title={a.blocked ? `Laukia — trūksta ${a.missing} įėjim${a.missing === 1 ? 'o' : 'ų'}` : 'Galima dirbti'}
-                                className={`text-[9px] font-semibold px-1.5 py-0 rounded-full ${s.bgClass} ${s.textClass} ${a.blocked ? 'opacity-40' : ''}`}
+                                title={a.state === 'laukia'
+                                  ? `Laukia — trūksta ${a.missing} įėjim${a.missing === 1 ? 'o' : 'ų'}`
+                                  : a.state === 'nepradeta'
+                                    ? 'Aktyvus, bet fakto pradžia nesuvesta — pažymėk pradžią arba pristabdyk'
+                                    : 'Dirbama'}
+                                className={`text-[9px] font-semibold px-1.5 py-0 rounded-full ${s.bgClass} ${s.textClass} ${a.state === 'laukia' ? 'opacity-40' : a.state === 'nepradeta' ? 'opacity-60' : ''}`}
                               >
-                                {s.shortName}{a.blocked ? ' (laukia)' : ''}
+                                {s.shortName}{suffix}
                               </span>
                             );
                           })}

@@ -331,6 +331,26 @@ export function useProjects() {
     });
   }, []);
 
+  /** Sąlyginio dokumento „netaikoma" perjungimas — netaikomas dokumentas neskaičiuojamas kaip trūkstamas. */
+  const toggleDocumentNA = useCallback((projectId: string, docId: string) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== projectId) return p;
+        const updatedProject = {
+          ...p,
+          dokumentai: p.dokumentai.map(doc =>
+            doc.id === docId ? { ...doc, notApplicable: !doc.notApplicable } : doc
+          ),
+          updatedAt: new Date().toISOString(),
+        };
+        upsertToSupabase(updatedProject).catch(() => {});
+        return updatedProject;
+      });
+      saveToLocalStorage(updated);
+      return updated;
+    });
+  }, []);
+
   const updateDocumentNotes = useCallback((projectId: string, docId: string, notes: string) => {
     setProjects(prev => {
       const updated = prev.map(p => {
@@ -722,6 +742,7 @@ export function useProjects() {
     copyProject,
     toggleChecklistItem,
     toggleDocument,
+    toggleDocumentNA,
     updateDocumentNotes,
     toggleStage,
     finishProject,

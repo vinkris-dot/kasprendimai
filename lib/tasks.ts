@@ -22,6 +22,8 @@ export interface TaskItem {
 
 export function generateAutoTasks(project: Project): TaskItem[] {
   const doc = (id: string) => project.dokumentai?.find(d => d.id === id);
+  // Netaikomas dokumentas prilygsta gautam — užduočių apie jį nebereikia
+  const got = (d?: import('./types').DocumentItem) => !!d && (d.received || !!d.notApplicable);
   const ts = project.taskStatuses ?? {};
   const active = project.activeStages ?? ['SR'];
   // Baigtumas per partCompleted (ne completedStages): faktinė pabaiga užskaitoma
@@ -36,9 +38,9 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   const d06 = doc('doc-06');
   const d07 = doc('doc-07');
 
-  const has02 = d02?.received ?? false;
-  const has03 = d03?.received ?? false;
-  const has04 = d04?.received ?? false;
+  const has02 = got(d02);
+  const has03 = got(d03);
+  const has04 = got(d04);
 
   const tasks: Omit<TaskItem, 'key' | 'projectId' | 'projectName'>[] = [];
 
@@ -56,7 +58,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   }
 
   // 2. Prepare authorization 00 (needs 02+03)
-  if (!d00?.received && !ts['order-00']?.doneAt) {
+  if (!got(d00) && !ts['order-00']?.doneAt) {
     tasks.push({
       taskKey: 'order-00', stage: 'SR', label: 'Parengti įgaliojimą (00)',
       sub: has02 && has03 ? '02 ir 03 gauta ✓' : 'laukia 02 ir 03',
@@ -66,7 +68,7 @@ export function generateAutoTasks(project: Project): TaskItem[] {
   }
 
   // 3. Parallel document tasks
-  if (!d07?.received && !ts['order-07']?.doneAt) {
+  if (!got(d07) && !ts['order-07']?.doneAt) {
     tasks.push({
       taskKey: 'order-07', stage: 'SR', label: 'Toponuotrauka (07)',
       assignee: 'NR', checkable: true,
@@ -80,7 +82,9 @@ export function generateAutoTasks(project: Project): TaskItem[] {
       dueDate: ts['order-04']?.dueDate, doneAt: ts['order-04']?.doneAt, isManual: false,
     });
   }
-  if (d06) {
+  // 05 ir 06 užsakymams BŪTINAS įgaliojimas (00) — be jo institucijos prašymų nepriima
+  const got00 = got(d00);
+  if (d06 && !d06.notApplicable) {
     const dates = d06.connectionDates ?? {};
     const missingConn = [
       !dates.vanduo && 'vanduo/nuotekos', !dates.lietus && 'lietus',
@@ -89,16 +93,18 @@ export function generateAutoTasks(project: Project): TaskItem[] {
     ].filter(Boolean) as string[];
     if (missingConn.length > 0 && !ts['order-06']?.doneAt) {
       tasks.push({
-        taskKey: 'order-06', stage: 'SR', label: 'Prisijungimo sąlygos (06)', sub: missingConn.join(', '),
-        assignee: 'NR', checkable: true,
+        taskKey: 'order-06', stage: 'SR', label: 'Prisijungimo sąlygos (06)',
+        sub: got00 ? missingConn.join(', ') : `laukia 00 įgaliojimo · ${missingConn.join(', ')}`,
+        assignee: 'NR', checkable: got00,
         dueDate: ts['order-06']?.dueDate, doneAt: ts['order-06']?.doneAt, isManual: false,
       });
     }
   }
-  if (!d05?.received && !ts['order-05']?.doneAt) {
+  if (!got(d05) && !ts['order-05']?.doneAt) {
     tasks.push({
       taskKey: 'order-05', stage: 'SR', label: 'SR pažyma (05)',
-      assignee: 'NR', checkable: true,
+      sub: got00 ? undefined : 'laukia 00 įgaliojimo',
+      assignee: 'NR', checkable: got00,
       dueDate: ts['order-05']?.dueDate, doneAt: ts['order-05']?.doneAt, isManual: false,
     });
   }
@@ -114,11 +120,13 @@ export function generateAutoTasks(project: Project): TaskItem[] {
     });
   }
 
-  // When docs ready + SR active → order SR+PS+territory docs
+  // When docs ready + SR active → order SR+PS+territory docs.
+  // SR (05) ir PS (06) užsakymui būtinas įgaliojimas (00).
   if (has02 && has03 && active.includes('SR') && !ts['order-sr-docs']?.doneAt) {
     tasks.push({
       taskKey: 'order-sr-docs', stage: 'SR', label: 'Užsakyti SR+PS+teritorijų planavimo dok.',
-      assignee: 'NR', checkable: true,
+      sub: got(d00) ? '00 įgaliojimas ✓' : 'laukia 00 įgaliojimo',
+      assignee: 'NR', checkable: got(d00),
       dueDate: ts['order-sr-docs']?.dueDate, doneAt: ts['order-sr-docs']?.doneAt, isManual: false,
     });
   }
@@ -154,9 +162,9 @@ export function generateAutoTasks(project: Project): TaskItem[] {
       && !active.includes('SLD') && !partCompleted(project, 'SLD')
       && !ts['start-sld']?.doneAt) {
     const missingSld = [
-      !d00?.received && '00 įgaliojimas',
-      !d05?.received && '05 SR',
-      !d06?.received && '06 prisijungimo sąlygos',
+      !got(d00) && '00 įgaliojimas',
+      !got(d05) && '05 SR',
+      !got(d06) && '06 prisijungimo sąlygos',
     ].filter(Boolean).join(', ');
     tasks.push({
       taskKey: 'start-sld', stage: 'SLD', label: 'Priduoti SLD (Infostatyba)',

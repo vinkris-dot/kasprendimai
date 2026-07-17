@@ -14,7 +14,10 @@ export const DEFAULT_RESULT_INPUTS: Record<string, ResultInput[]> = {
   // SR ir PP startui oficialių dokumentų nereikia — Kristina pirminę analizę ir
   // koncepciją daro iš viešų šaltinių (Regia, planuojustatau.lt). Dokumentai
   // pažymėti soft: reikalingi tik užbaigimui, starto neblokuoja (2026-07-15).
+  // Įgaliojimas (00) — soft SR įėjimas (2026-07-17): be jo negalima UŽSAKYTI
+  // specialiųjų reikalavimų (05) ir prisijungimo sąlygų (06), t. y. SR neužbaigsi.
   SR: [
+    { id: 'in-sr-00', label: 'Įgaliojimas (00) — 05/06 užsakymui', kind: 'dokumentas', docId: 'doc-00', soft: true },
     { id: 'in-sr-02', label: 'Nuosavybės dokumentas (02)', kind: 'dokumentas', docId: 'doc-02', soft: true },
     { id: 'in-sr-03', label: 'Sklypo ribų planas (03)', kind: 'dokumentas', docId: 'doc-03', soft: true },
     { id: 'in-sr-04', label: 'Teritorijų planavimo ištrauka (04)', kind: 'dokumentas', docId: 'doc-04', soft: true },
@@ -170,6 +173,8 @@ export function getInputStatus(project: Project, input: ResultInput): InputStatu
   if (input.docId) {
     const doc = [...(project.dokumentai ?? []), ...(project.kitiDokumentai ?? [])]
       .find(d => d.id === input.docId);
+    // Netaikomas dokumentas sąlygos neblokuoja — laikomas įvykdytu
+    if (doc?.notApplicable) return 'yra';
     if (doc?.received) return 'yra';
     if (doc?.orderedDate) return 'uzsakyta';
     return 'nera';
@@ -291,6 +296,77 @@ export function getStageProcessInfo(project: Project, stageId: StageId): StagePr
     return { state: SUBMITTAL_STAGES.includes(stageId) ? 'priduota' : 'dirbama', readiness };
   }
   return { state: readiness.ready ? 'galima' : 'laukiama', readiness };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Etapo perjungimo sargas: ką reikia patvirtinti PRIEŠ toggleStage
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface StageToggleGuard {
+  /** Ką padarys toggleStage: užbaigs / grąžins į aktyvius / pradės. */
+  action: 'complete' | 'reactivate' | 'activate';
+  /** Įspėjimai patvirtinimo dialogui; tuščias masyvas — patvirtinimo nereikia. */
+  warnings: string[];
+  /** Užbaigiama be suvestos fakto pradžios — verta paprašyti datos. */
+  missingStart: boolean;
+  /** Etapai, kurie po aktyvavimo taps rodomi „baigtais" be fakto datų. */
+  implicitDone: StageId[];
+}
+
+/**
+ * Kokių patvirtinimų reikia prieš toggleStage(stageId). Vienas paspaudimas
+ * neturi tyliai perrašyti istorijos: užbaigimas be sąlygų, grįžimas iš
+ * „baigta" (trinama fakto pabaiga) ir užrakinto etapo aktyvavimas (ankstesni
+ * etapai pagal grafiko konvenciją taps rodomi baigtais) — visi perspėjami.
+ */
+export function getStageToggleGuard(project: Project, stageId: StageId): StageToggleGuard {
+  const active = project.activeStages ?? [];
+  const completed = project.completedStages ?? [];
+  const readiness = getResultReadiness(project, stageResultId(stageId));
+  const hardLeft = readiness.inputs.filter(i => i.status !== 'yra' && !i.input.soft).map(i => i.input.label);
+  const softLeft = readiness.inputs.filter(i => i.status !== 'yra' && i.input.soft).map(i => i.input.label);
+
+  if (active.includes(stageId)) {
+    const warnings: string[] = [];
+    if (hardLeft.length) warnings.push(`Trūksta būtinų sąlygų: ${hardLeft.join(', ')}.`);
+    if (softLeft.length) warnings.push(`Užbaigimui dar trūksta: ${softLeft.join(', ')}.`);
+    return {
+      action: 'complete',
+      warnings,
+      missingStart: !project.stageStatuses?.[stageId]?.startDate,
+      implicitDone: [],
+    };
+  }
+
+  const factEnd = project.stageStatuses?.[stageId]?.endDate;
+  if (completed.includes(stageId) || factEnd) {
+    return {
+      action: 'reactivate',
+      warnings: [factEnd
+        ? `Fakto pabaiga (${factEnd}) bus išvalyta — etapas grįš į aktyvius.`
+        : 'Etapas grįš į aktyvius.'],
+      missingStart: false,
+      implicitDone: [],
+    };
+  }
+
+  const warnings: string[] = [];
+  if (hardLeft.length) warnings.push(`Etapas dar užrakintas — laukia: ${hardLeft.join(', ')}.`);
+  // Kurie etapai TAPS „praėjusiais" (rodomi baigtais) po šio aktyvavimo
+  const validIds = validStageIds(project.selectedParts);
+  const order = STAGE_ORDER.filter(s => validIds.includes(s));
+  const idx = order.indexOf(stageId);
+  const activeIdxs = active.map(s => order.indexOf(s as StageId)).filter(i => i >= 0);
+  const prevMin = activeIdxs.length ? Math.min(...activeIdxs) : null; // null — niekas nebuvo „praėjęs"
+  const newMin = Math.min(idx, ...(activeIdxs.length ? activeIdxs : [idx]));
+  const implicitDone = order.filter((s, i) => {
+    if (s === stageId) return false;
+    if (completed.includes(s) || project.stageStatuses?.[s]?.endDate) return false;
+    if (active.includes(s)) return false;
+    const wasPast = prevMin !== null && i < prevMin;
+    return i < newMin && !wasPast;
+  });
+  return { action: 'activate', warnings, missingStart: false, implicitDone };
 }
 
 /**

@@ -248,7 +248,7 @@ export const STAGES: StageInfo[] = [
     tasks: [
       { label: 'Analizė, dokumentų užsakymas (NTR, žemės sklypo ribų planas, DP ar ZPP (jeigu yra), toponuotrauka)', duration: '1 d.' },
       { label: 'Dokumentų gavimas', duration: '~2 sav.' },
-      { label: 'Sąlygų / SR užsakymas', duration: '1 d.' },
+      { label: 'Sąlygų / SR užsakymas (būtinas įgaliojimas 00)', duration: '1 d.' },
       { label: 'Specialiųjų reikalavimų (SR) gavimas', duration: '~3 sav.' },
     ],
   },

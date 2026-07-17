@@ -44,21 +44,25 @@ describe('getTeamWorkload', () => {
     expect(w.NR.total).toBe(0);
   });
 
-  it('SR dirbamas ir be dokumentų (soft įėjimai starto neblokuoja)', () => {
-    const p = makeProject(); // 02/03 negauti, bet analizę/užsakymą galima daryti
-    const w = getTeamWorkload([p]);
+  it('SR be fakto pradžios — nepradėtas (vaiduoklis), su pradžia — dirbamas', () => {
+    const ghost = makeProject(); // aktyvus SR, bet fakto pradžios nėra
+    const working = makeProject({ stageStatuses: { SR: { startDate: '2026-01-05', endDate: '', completed: false, notes: '' } } });
+    const w = getTeamWorkload([ghost, working]);
     expect(w.NR.blocked).toBe(0);
-    expect(w.NR.workable).toBe(1);
+    expect(w.NR.startable).toBe(1);
+    expect(w.NR.worked).toBe(1);
+    const g = w.NR.assignments.find(a => a.projectId === ghost.id);
+    expect(g).toMatchObject({ state: 'nepradeta' });
   });
-  it('SLD užblokuotas kietais įėjimais, gavus viską — dirbamas', () => {
+  it('SLD užblokuotas kietais įėjimais; gavus viską be pradžios — nepradėtas', () => {
     const blocked = makeProject({ activeStages: ['SLD'] as StageId[] });
     const ready = makeProject({ activeStages: ['SLD'] as StageId[], completedStages: ['PP'] as StageId[] });
     markAllReceived(ready);
     const w = getTeamWorkload([blocked, ready]);
     expect(w.NR.blocked).toBe(1);
-    expect(w.NR.workable).toBe(1);
+    expect(w.NR.startable).toBe(1);
     const b = w.NR.assignments.find(a => a.projectId === blocked.id);
-    expect(b).toMatchObject({ blocked: true });
+    expect(b).toMatchObject({ blocked: true, state: 'laukia' });
   });
 
   it('vienas etapas keliems žmonėms skaičiuojasi kiekvienam', () => {
@@ -73,51 +77,59 @@ describe('getTeamWorkload', () => {
       activeStages: ['PP_VIESIMAS'] as StageId[],
       stageAssignees: { PP_VIESIMAS: ['NR'] as TeamMemberId[] },
     });
-    // PP nebaigtas (nėra completed, o aktyvus tik PP_VIESIMAS → PP praeitas pagal
-    // grafiko konvenciją... PP eina PRIEŠ PP_VIESIMAS, tad laikomas baigtu → workable)
+    // PP praeitas pagal grafiko konvenciją → atrakinta; be fakto pradžios — nepradėtas
     const w = getTeamWorkload([p]);
     expect(w.NR.total).toBe(1);
-    expect(w.NR.workable).toBe(1);
+    expect(w.NR.startable).toBe(1);
   });
 });
 
 describe('valandinė apkrova', () => {
-  it('SR etapas NR: 10 val. / 5 sav. = 2 val./sav.', () => {
-    const p = makeProject();
+  const started = (sid: string, date = '2026-01-05') => ({ [sid]: { startDate: date, endDate: '', completed: false, notes: '' } });
+
+  it('SR etapas NR: 10 val. / 5 sav. = 2 val./sav. (su fakto pradžia)', () => {
+    const p = makeProject({ stageStatuses: started('SR') });
     markAllReceived(p);
     const w = getTeamWorkload([p]);
-    expect(w.NR.workableHours).toBeCloseTo(2, 1);
+    expect(w.NR.workedHours).toBeCloseTo(2, 1);
   });
   it('PP etapas: KV 72 val./8 sav. = 9, NR 7/8', () => {
-    const p = makeProject({ activeStages: ['PP'] as StageId[] });
+    const p = makeProject({ activeStages: ['PP'] as StageId[], stageStatuses: started('PP') });
     markAllReceived(p);
     const w = getTeamWorkload([p]);
-    expect(w.KV.workableHours).toBeCloseTo(9, 1);
-    expect(w.NR.workableHours).toBeCloseTo(7 / 8, 1);
+    expect(w.KV.workedHours).toBeCloseTo(9, 1);
+    expect(w.NR.workedHours).toBeCloseTo(7 / 8, 1);
   });
   it('užblokuoto etapo valandos eina į blockedHours (SLD be įėjimų: 12 val./6 sav.)', () => {
     const p = makeProject({ activeStages: ['SLD'] as StageId[] });
     const w = getTeamWorkload([p]);
-    expect(w.NR.workableHours).toBe(0);
+    expect(w.NR.workedHours).toBe(0);
     expect(w.NR.blockedHours).toBeCloseTo(2, 1);
   });
-  it('KV pirminė analizė SR etape: 3 val. / 5 sav. = 0.6 val./sav.', () => {
-    const p = makeProject();
+  it('nepradėto (be fakto pradžios) etapo valandos eina į startableHours', () => {
+    const p = makeProject(); // SR aktyvus, atrakintas, be pradžios
     const w = getTeamWorkload([p]);
-    expect(w.KV.workableHours).toBeCloseTo(0.6, 1);
+    expect(w.NR.workedHours).toBe(0);
+    expect(w.NR.startableHours).toBeCloseTo(2, 1);
+  });
+  it('KV pirminė analizė SR etape: 3 val. / 5 sav. = 0.6 val./sav.', () => {
+    const p = makeProject({ stageStatuses: started('SR') });
+    const w = getTeamWorkload([p]);
+    expect(w.KV.workedHours).toBeCloseTo(0.6, 1);
   });
   it('TDP: pasirinktų dalių suma paskleista per bloką (SP+SA: 43 val. / 3 sav.)', () => {
     const p = makeProject({
       activeStages: ['TDP'] as StageId[],
       selectedParts: { ...DEFAULT_PARTS, SP: true, SA: true },
       stageAssignees: { TDP: ['LL'] as TeamMemberId[] },
+      stageStatuses: started('TDP'),
     });
     markAllReceived(p);
     p.completedStages = ['SLD'] as StageId[];
     const w = getTeamWorkload([p]);
     // TDP blokas pagal fazes: SA 14 + SP 7 = 21 d. = 3 sav.; (12+31)/3 ≈ 14.3
     // (2026-07-16: LL PP 24 val., SA 48→31, SP 19→12)
-    expect(w.LL.workableHours).toBeCloseTo(14.3, 1);
+    expect(w.LL.workedHours).toBeCloseTo(14.3, 1);
   });
 });
 
