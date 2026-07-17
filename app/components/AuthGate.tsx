@@ -50,8 +50,21 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
     });
     setSending(false);
-    if (err) setError('Nepavyko išsiųsti nuorodos. Patikrinkite el. pašto adresą — prieigą turi tik pakviesti naudotojai.');
-    else setSent(true);
+    if (err) {
+      // Rodome tikrą priežastį — bendrinis tekstas slėpė laiškų kvotos limitą
+      // (įmontuotas Supabase paštas leidžia vos kelis laiškus per valandą)
+      const code = (err as { code?: string }).code ?? '';
+      const status = (err as { status?: number }).status;
+      if (code === 'over_email_send_rate_limit' || status === 429) {
+        setError('Per daug laiškų per trumpą laiką — leidžiami tik keli per valandą. Palaukite ~valandą arba įveskite kodą iš jau gauto laiško (žemiau).');
+      } else if (/signup/i.test(err.message ?? '')) {
+        setError('Šis el. paštas neturi prieigos — ją turi tik pakviesti naudotojai.');
+      } else {
+        setError(`Nepavyko išsiųsti laiško. ${err.message ?? ''}`);
+      }
+      return;
+    }
+    setSent(true);
   }
 
   // Kodo patvirtinimas vyksta ČIA, be jokio peradresavimo — todėl sesija
